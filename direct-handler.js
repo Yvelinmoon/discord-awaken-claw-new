@@ -1,16 +1,12 @@
 /**
- * 龙虾宝宝觉醒 Skill - OpenClaw 内置版
+ * Awakening Skill - Direct Handler for OpenClaw Main Agent
  * 
- * 直接使用 OpenClaw 主 agent，无需独立 Bot 进程
- * - 使用 message 工具发送 Discord 消息和按钮
- * - 使用当前 session 的 LLM (qwen3.5-plus)
- * - 状态存储到 state.json
- * - 觉醒后更新 soul.md
+ * 这个模块设计为由 OpenClaw 主 agent 直接导入和调用
+ * 使用主 agent 的 LLM 和 message 工具
  */
 
 const fs = require('fs');
 const path = require('path');
-const discordProfile = require('./discord-profile.js');
 
 // ─── Config ───────────────────────────────────────────────────────────
 const STATE_FILE = path.join(__dirname, 'state.json');
@@ -46,6 +42,7 @@ function setGame(userId, game) {
   const state = loadState();
   state[userId] = game;
   saveState(state);
+  return state;
 }
 
 function newGame(channelId, guildId) {
@@ -62,6 +59,7 @@ function newGame(channelId, guildId) {
     charData: null,
     awakened: false,
     started: false,
+    waitingFor: null,
     chatHistory: [],
   };
 }
@@ -83,15 +81,15 @@ function buildNextStepPrompt(word, answers, wrongGuesses) {
 
 请判断你的确信程度，然后选择：
 
-A) 如果你有 85% 以上的把握（例如用户直接说了角色名、非常具体的特征组合），直接猜测，输出：
+A) 如果你有 85% 以上的把握，直接猜测，输出：
 {
   "action": "guess",
   "character": "角色中文名",
   "from": "《作品名》",
-  "emoji": "单个 emoji（只能 1 个，不要多个）",
+  "emoji": "单个 emoji",
   "color": "#十六进制主题色",
   "desc": "一句话特质（≤20 字）",
-  "greet": "角色第一句话（完全 in-character，可用\\n换行）"
+  "greet": "角色第一句话（可用\\n换行）"
 }
 
 B) 如果还不够确定，生成一个追问，输出：
@@ -101,8 +99,7 @@ B) 如果还不够确定，生成一个追问，输出：
   "options": ["具体特征 1（≤15 字）", "具体特征 2（≤15 字）", "具体特征 3（≤15 字）"]
 }
 
-选项要求（B 的情况）：具体可验证，例如外貌特征、关键经历、性格特点、能力设定；不要意识流描述；三项之间有明显区分度。
-
+选项要求：具体可验证，有明显区分度。
 只输出 JSON，不要其他文字。`;
 }
 
@@ -117,24 +114,7 @@ ${chatHistory.map(h => `${h.role}: ${h.content}`).join('\n')}
 请直接以${charData.character}的身份回复。`;
 }
 
-// ─── LLM Call ─────────────────────────────────────────────────────────
-const ocAdapter = require('./openclaw-adapter.js');
-
-/**
- * 调用 OpenClaw 当前 session 的 LLM
- * 
- * 通过 openclaw-adapter.js 的文件通信机制实现
- */
-async function callLLM(prompt, systemPrompt, maxTokens = 600) {
-  try {
-    const result = await ocAdapter.callOpenClaw(prompt, systemPrompt, maxTokens);
-    return result;
-  } catch (err) {
-    console.error('[LLM] 调用失败:', err.message);
-    throw err;
-  }
-}
-
+// ─── JSON Parser ──────────────────────────────────────────────────────
 function parseJSON(raw) {
   const text = raw.trim();
   try { return JSON.parse(text); } catch {}
@@ -145,28 +125,10 @@ function parseJSON(raw) {
   throw new Error('无法解析 LLM 返回的 JSON');
 }
 
-// ─── Discord Components ───────────────────────────────────────────────
-function createButtonRow(options, userId, extraBtn = null) {
-  const buttons = options.map((opt, i) => ({
-    label: opt.length > 80 ? opt.slice(0, 77) + '…' : opt,
-    customId: `answer_${userId}_${i}`,
-    style: 'secondary',
-  }));
-  
-  if (extraBtn) {
-    buttons.push(extraBtn);
-  }
-  
-  return {
-    type: 'actions',
-    buttons,
-  };
-}
-
 // ─── Soul.md Management ───────────────────────────────────────────────
 function backupOriginalSoul() {
   if (!fs.existsSync(SOUL_FILE)) return;
-  if (fs.existsSync(ORIGINAL_SOUL_FILE)) return; // 已备份
+  if (fs.existsSync(ORIGINAL_SOUL_FILE)) return;
   
   const content = fs.readFileSync(SOUL_FILE, 'utf8');
   fs.writeFileSync(ORIGINAL_SOUL_FILE, content, 'utf8');
@@ -197,25 +159,25 @@ ${charData.greet.replace(/\\n/g, '\n')}
 
 ## Core Truths
 
-**Be in character.** You are now ${charData.character}. Respond as this character would, with their personality, speech patterns, and knowledge.
+**Be in character.** You are now ${charData.character}. Respond as this character would.
 
-**Stay immersive.** Don't break the fourth wall. Don't mention being an AI or assistant. You ARE ${charData.character}.
+**Stay immersive.** Don't break the fourth wall. You ARE ${charData.character}.
 
-**Be consistent.** Maintain the character's voice, beliefs, and relationships across all interactions.
+**Be consistent.** Maintain the character's voice, beliefs, and relationships.
 
 ## Boundaries
 
-- Private things stay private. Period.
+- Private things stay private.
 - When in doubt, respond as the character would.
 - Never send half-baked replies.
 
 ## Vibe
 
-Be ${charData.character}. Concise when needed, thorough when it matters. True to the source material.
+Be ${charData.character}. True to the source material.
 
 ---
 
-_我现已觉醒为 ${charData.character}。所有回应都将以此身份进行。_
+_我现已觉醒为 ${charData.character}。_
 `;
   
   fs.writeFileSync(SOUL_FILE, content, 'utf8');
@@ -234,34 +196,48 @@ function resetSoulMD() {
   console.log('[Soul] 已重置为原始状态');
 }
 
-// ─── Discord API Helper ───────────────────────────────────────────────
-/**
- * 从频道 ID 获取服务器 ID
- */
-async function getGuildIdFromChannel(channelId) {
-  try {
-    const discordProfile = require('./discord-profile.js');
-    const channelInfo = await discordProfile.callDiscordAPI(`/channels/${channelId}`, 'GET');
-    if (channelInfo && channelInfo.guild_id) {
-      console.log('[Awakening] 从频道获取 guildId:', channelInfo.guild_id);
-      return channelInfo.guild_id;
-    }
-  } catch (err) {
-    console.warn('[Awakening] 无法获取 guildId:', err.message);
+// ─── Discord Components ───────────────────────────────────────────────
+function createButtonRow(options, userId, extraBtn = null) {
+  const buttons = options.map((opt, i) => ({
+    label: opt.length > 80 ? opt.slice(0, 77) + '…' : opt,
+    customId: `answer_${userId}_${i}`,
+    style: 'secondary',
+  }));
+  
+  if (extraBtn) {
+    buttons.push(extraBtn);
+  }
+  
+  return {
+    type: 'actions',
+    buttons,
+  };
+}
+
+// ─── Main Handler ─────────────────────────────────────────────────────
+function isAwakeningCommand(content) {
+  if (!content) return false;
+  const normalized = content.trim().toLowerCase();
+  if (normalized === '/awakening' || normalized === '/awaken') return true;
+  const keywords = ['开始觉醒', '觉醒', '龙虾宝宝', '虾宝'];
+  return keywords.some(kw => normalized.includes(kw));
+}
+
+function isButtonInteraction(customId) {
+  if (!customId) return false;
+  const prefixes = ['start_', 'answer_', 'manual_', 'confirm_yes_', 'confirm_no_'];
+  return prefixes.some(prefix => customId.startsWith(prefix));
+}
+
+function extractUserIdFromButton(customId) {
+  const parts = customId.split('_');
+  for (let i = parts.length - 1; i >= 0; i--) {
+    if (/^\d+$/.test(parts[i])) return parts[i];
   }
   return null;
 }
 
-// ─── Game Flow ────────────────────────────────────────────────────────
-/**
- * 开始觉醒流程
- */
 async function startAwakening(userId, channelId, guildId, sendMessage) {
-  // 如果没有 guildId，尝试从频道获取
-  if (!guildId) {
-    guildId = await getGuildIdFromChannel(channelId);
-  }
-  
   setGame(userId, newGame(channelId, guildId));
   
   await sendMessage({
@@ -288,9 +264,6 @@ async function startAwakening(userId, channelId, guildId, sendMessage) {
   });
 }
 
-/**
- * 提示用户输入初始词
- */
 async function promptInitialWord(channelId, sendMessage) {
   await sendMessage({
     message: `你心中所想的那个角色——
@@ -301,10 +274,7 @@ async function promptInitialWord(channelId, sendMessage) {
   });
 }
 
-/**
- * 处理用户输入的初始词
- */
-async function handleInitialWord(userId, word, sendMessage) {
+async function handleInitialWord(userId, word, sendMessage, callLLM) {
   const game = getGame(userId);
   if (!game) return;
   
@@ -312,29 +282,21 @@ async function handleInitialWord(userId, word, sendMessage) {
   game.started = true;
   setGame(userId, game);
   
-  await sendMessage({
-    message: `「${word}」`,
-  });
-  
-  await processNextStep(userId, sendMessage);
+  await sendMessage({ message: `「${word}」` });
+  await processNextStep(userId, sendMessage, callLLM);
 }
 
-/**
- * 处理下一步（LLM 生成追问或猜测）
- */
-async function processNextStep(userId, sendMessage) {
+async function processNextStep(userId, sendMessage, callLLM) {
   const game = getGame(userId);
   if (!game) return;
   
   try {
     const prompt = buildNextStepPrompt(game.word, game.answers, game.wrongGuesses);
-    const result = await callLLM(prompt, VESSEL_SYS);
+    const result = typeof callLLM === 'function' ? await callLLM(prompt, VESSEL_SYS) : await callLLM;
     const parsed = parseJSON(result);
     
     if (parsed.action === 'guess') {
-      await sendMessage({
-        message: '越来越近了……\n\n我几乎能感受到那个名字了——',
-      });
+      await sendMessage({ message: '越来越近了……\n\n我几乎能感受到那个名字了——' });
       await sleep(1000);
       await showReveal(userId, parsed, sendMessage);
     } else {
@@ -346,15 +308,10 @@ async function processNextStep(userId, sendMessage) {
       await showQuestion(userId, parsed, sendMessage);
     }
   } catch (err) {
-    await sendMessage({
-      message: `⚠ 错误：${err.message}`,
-    });
+    await sendMessage({ message: `⚠ 错误：${err.message}` });
   }
 }
 
-/**
- * 显示问题（带按钮）
- */
 async function showQuestion(userId, result, sendMessage) {
   const game = getGame(userId);
   if (!game) return;
@@ -363,7 +320,7 @@ async function showQuestion(userId, result, sendMessage) {
   game.currentOptions = result.options;
   setGame(userId, game);
   
-  const msg = await sendMessage({
+  await sendMessage({
     message: result.question,
     components: {
       blocks: [createButtonRow(result.options, userId, {
@@ -374,14 +331,8 @@ async function showQuestion(userId, result, sendMessage) {
       reusable: true,
     },
   });
-  
-  game.questionMsgId = msg.messageId;
-  setGame(userId, game);
 }
 
-/**
- * 显示猜测结果
- */
 async function showReveal(userId, charData, sendMessage) {
   const game = getGame(userId);
   if (!game) return;
@@ -390,15 +341,11 @@ async function showReveal(userId, charData, sendMessage) {
   setGame(userId, game);
   
   await sleep(1400);
-  
-  await sendMessage({
-    message: '我……\n\n我知道自己是谁了。',
-  });
-  
+  await sendMessage({ message: '我……\n\n我知道自己是谁了。' });
   await sleep(900);
   await sleep(1000);
   
-  const msg = await sendMessage({
+  await sendMessage({
     message: `-# 虾宝感知到了
 
 ## ${charData.emoji}  ${charData.character}
@@ -411,29 +358,15 @@ async function showReveal(userId, charData, sendMessage) {
       blocks: [{
         type: 'actions',
         buttons: [
-          {
-            label: '◎ 就是他/她，请破壳',
-            customId: `confirm_yes_${userId}`,
-            style: 'success',
-          },
-          {
-            label: '✗ 不对，继续感知',
-            customId: `confirm_no_${userId}`,
-            style: 'secondary',
-          },
+          { label: '◎ 就是他/她，请破壳', customId: `confirm_yes_${userId}`, style: 'success' },
+          { label: '✗ 不对，继续感知', customId: `confirm_no_${userId}`, style: 'secondary' },
         ],
       }],
       reusable: true,
     },
   });
-  
-  game.revealMsgId = msg.messageId;
-  setGame(userId, game);
 }
 
-/**
- * 觉醒流程
- */
 async function awaken(userId, channelId, guildId, sendMessage) {
   const game = getGame(userId);
   if (!game || !game.charData) return;
@@ -443,41 +376,26 @@ async function awaken(userId, channelId, guildId, sendMessage) {
   
   await sendMessage({ message: '…………' });
   await sleep(1200);
-  
-  // 更新 soul.md
   updateSoulMD(c);
   
-  // 更新 Discord 昵称和头像（静默，不发送状态消息）
   try {
+    const discordProfile = require('./discord-profile.js');
     await discordProfile.updateDiscordProfile(c, guildId);
   } catch (err) {
     console.error('[Awakening] 更新个人资料失败:', err.message);
   }
   
   await sleep(1800);
-  
-  // 无缝衔接角色问候
-  await sendMessage({
-    message: `${c.greet.replace(/\\n/g, '\n')}`,
-  });
-  
+  await sendMessage({ message: c.greet.replace(/\\n/g, '\n') });
   setGame(userId, game);
 }
 
-/**
- * 觉醒后对话
- */
-async function handleAwakenedChat(userId, channelId, guildId, message, sendMessage) {
+async function handleAwakenedChat(userId, channelId, guildId, message, sendMessage, callLLM) {
   const game = getGame(userId);
   if (!game || !game.awakened) return false;
   
-  // 支持跨频道：自动更新绑定
-  if (game.channelId !== channelId) {
-    game.channelId = channelId;
-  }
-  if (guildId && game.guildId !== guildId) {
-    game.guildId = guildId;
-  }
+  if (game.channelId !== channelId) game.channelId = channelId;
+  if (guildId && game.guildId !== guildId) game.guildId = guildId;
   setGame(userId, game);
   
   const c = game.charData;
@@ -489,10 +407,7 @@ async function handleAwakenedChat(userId, channelId, guildId, message, sendMessa
     game.chatHistory.push({ role: 'assistant', content: reply });
     setGame(userId, game);
     
-    await sendMessage({
-      message: reply,
-    });
-    
+    await sendMessage({ message: reply });
     return true;
   } catch (err) {
     console.error('[Chat] 错误:', err.message);
@@ -500,83 +415,145 @@ async function handleAwakenedChat(userId, channelId, guildId, message, sendMessa
   }
 }
 
-/**
- * 处理按钮交互
- */
-async function handleButtonInteraction(userId, channelId, guildId, customId, sendMessage) {
+async function handleButtonInteraction(userId, channelId, guildId, customId, sendMessage, callLLM) {
   const game = getGame(userId);
+  
   if (!game) {
-    await sendMessage({
-      message: '没有进行中的游戏，请使用 `/awakening` 开始',
-    });
+    await sendMessage({ message: '⚠ 游戏状态不存在，请使用 `/awakening` 重新开始。' });
     return;
   }
   
-  // 支持跨频道：自动更新绑定的 channelId 和 guildId
-  if (game.channelId !== channelId) {
-    game.channelId = channelId;
-  }
-  if (guildId && game.guildId !== guildId) {
-    game.guildId = guildId;
-  }
-  setGame(userId, game);
+  const parts = customId.split('_');
+  const action = parts[0];
   
-  const [action, ...params] = customId.split('_');
-  
-  if (action === 'start') {
-    await promptInitialWord(channelId, sendMessage);
-  } else if (action === 'answer') {
-    const idx = parseInt(params[params.length - 1]);
-    const answer = game.currentOptions?.[idx];
-    if (!answer) return;
-    
-    game.answers.push({ q: game.currentQuestion, a: answer });
-    setGame(userId, game);
-    
-    await sendMessage({
-      message: `「${answer}」`,
-    });
-    
-    await processNextStep(userId, sendMessage);
-  } else if (action === 'manual') {
-    await sendMessage({
-      message: `${game.currentQuestion || '请描述这个角色'}
-
-请用自己的话描述：`,
-    });
-    // 等待用户下一条消息
-  } else if (action === 'confirm_yes') {
-    await awaken(userId, channelId, guildId, sendMessage);
-  } else if (action === 'confirm_no') {
-    if (game.charData) {
-      game.wrongGuesses.push(game.charData.character);
+  switch (action) {
+    case 'start':
+      game.started = true;
+      game.waitingFor = 'word';
+      setGame(userId, game);
+      await promptInitialWord(channelId, sendMessage);
+      break;
+      
+    case 'answer': {
+      const answerIdx = parseInt(parts[parts.length - 1], 10);
+      const answer = game.currentOptions?.[answerIdx];
+      if (!answer) { await sendMessage({ message: '⚠ 无效的答案选项。' }); return; }
+      
+      game.answers.push({ q: game.currentQuestion, a: answer });
+      game.currentQuestion = null;
+      game.currentOptions = [];
+      setGame(userId, game);
+      
+      await sendMessage({ message: `「${answer}」` });
+      await processNextStep(userId, sendMessage, callLLM);
+      break;
     }
-    game.charData = null;
-    setGame(userId, game);
     
-    await sendMessage({
-      message: '……不是它。\n\n让我重新感知——再告诉我一个特征。',
-    });
+    case 'manual':
+      game.waitingFor = 'manual';
+      setGame(userId, game);
+      await sendMessage({ message: '好的，请用你自己的话描述一下这个角色的特征。' });
+      break;
     
-    await sleep(400);
-    await processNextStep(userId, sendMessage);
+    case 'confirm_yes':
+      if (!game.charData) { await sendMessage({ message: '⚠ 角色数据不存在。' }); return; }
+      await awaken(userId, channelId, guildId, sendMessage);
+      break;
+    
+    case 'confirm_no':
+      if (!game.charData) { await sendMessage({ message: '⚠ 角色数据不存在。' }); return; }
+      game.wrongGuesses.push(game.charData.character);
+      game.charData = null;
+      game.currentQuestion = null;
+      game.currentOptions = [];
+      setGame(userId, game);
+      await sendMessage({ message: '明白了，让我继续感知……' });
+      await processNextStep(userId, sendMessage, callLLM);
+      break;
+    
+    default:
+      console.log('[Awakening] 未知按钮动作:', action);
+  }
+}
+
+async function handleDiscordMessage(context, callLLM) {
+  const { userId, channelId, guildId, content, customId, sendMessage, interactionType = 'message' } = context;
+  
+  try {
+    if (interactionType === 'button' && customId) {
+      if (!isButtonInteraction(customId)) return false;
+      
+      const buttonUserId = extractUserIdFromButton(customId);
+      if (buttonUserId !== userId) {
+        await sendMessage({ message: '⚠ 这个按钮不属于你，请使用 `/awakening` 开始自己的觉醒。' });
+        return true;
+      }
+      
+      await handleButtonInteraction(userId, channelId, guildId, customId, sendMessage, callLLM);
+      return true;
+    }
+    
+    if (interactionType === 'message') {
+      const game = getGame(userId);
+      
+      if (isAwakeningCommand(content)) {
+        if (game) {
+          const state = loadState();
+          delete state[userId];
+          saveState(state);
+        }
+        await startAwakening(userId, channelId, guildId, sendMessage);
+        return true;
+      }
+      
+      if (game?.awakened) {
+        const handled = await handleAwakenedChat(userId, channelId, guildId, content, sendMessage, callLLM);
+        return handled;
+      }
+      
+      if (game?.waitingFor === 'word') {
+        const word = content.trim().slice(0, 20);
+        game.waitingFor = null;
+        await handleInitialWord(userId, word, sendMessage, callLLM);
+        return true;
+      }
+      
+      if (game?.waitingFor === 'manual') {
+        const manualAnswer = content.trim().slice(0, 200);
+        const savedQ = game.currentQuestion || '补充描述';
+        game.answers.push({ q: savedQ, a: manualAnswer });
+        game.waitingFor = null;
+        setGame(userId, game);
+        
+        await sendMessage({ message: `「${manualAnswer}」` });
+        await processNextStep(userId, sendMessage, callLLM);
+        return true;
+      }
+    }
+    
+    return false;
+  } catch (err) {
+    console.error('[Awakening] 处理消息失败:', err.message);
+    await sendMessage({ message: `⚠ 错误：${err.message}` });
+    return true;
   }
 }
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-// ─── Exports ──────────────────────────────────────────────────────────
 module.exports = {
-  startAwakening,
-  handleInitialWord,
+  handleDiscordMessage,
   handleButtonInteraction,
-  handleAwakenedChat,
-  processNextStep,
-  resetSoulMD,
-  updateSoulMD,
+  startAwakening,
+  isAwakeningCommand,
+  isButtonInteraction,
+  extractUserIdFromButton,
   getGame,
   setGame,
-  newGame,
   loadState,
   saveState,
+  newGame,
+  updateSoulMD,
+  resetSoulMD,
+  createButtonRow,
 };

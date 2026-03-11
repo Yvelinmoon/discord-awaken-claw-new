@@ -1,15 +1,13 @@
 {
   "name": "discord-awaken-claw",
   "version": "1.0.0",
-  "description": "🦞 龙虾宝宝觉醒技能 - 完整的角色觉醒流程",
-  "main": "index.js",
+  "description": "🦞 龙虾宝宝觉醒技能 - Discord 角色觉醒",
+  "main": "direct-handler.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node --watch index.js"
+    "test": "echo 'Import direct-handler.js and use handleDiscordMessage()'"
   },
   "keywords": [
     "discord",
-    "bot",
     "awakening",
     "roleplay",
     "openclaw"
@@ -17,7 +15,6 @@
   "author": "Yves",
   "license": "MIT",
   "dependencies": {
-    "discord.js": "^14.14.1",
     "undici": "^6.0.0"
   },
   "engines": {
