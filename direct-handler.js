@@ -84,7 +84,7 @@ function buildNextStepPrompt(word, answers, wrongGuesses) {
 A) 如果你有 85% 以上的把握，直接猜测，输出：
 {
   "action": "guess",
-  "character": "角色中文名",
+  "character": "角色中文名全名",
   "from": "《作品名》",
   "emoji": "单个 emoji",
   "color": "#十六进制主题色",
