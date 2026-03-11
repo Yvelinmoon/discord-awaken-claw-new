@@ -123,6 +123,7 @@ const handled = await handler.handleDiscordMessage({
 - 或用户 `@Bot 开始觉醒`
 
 **执行逻辑（direct-handler.js:startAwakening）：**
+**必须严格按照以下示例输出首轮引导内容及插件**
 ```javascript
 await sendMessage({
   message: `○  龙虾宝宝 · 等待破壳中
@@ -153,6 +154,7 @@ await sendMessage({
 - ✅ 按钮 customId 必须包含用户 ID（`start_${userId}`）
 - ✅ 按钮样式为 Primary（蓝色）
 - ✅ 文案必须精确匹配（营造神秘氛围）
+
 
 ---
 
