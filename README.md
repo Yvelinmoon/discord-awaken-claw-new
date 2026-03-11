@@ -26,6 +26,7 @@ cd awakening
 ### 2. 配置环境变量
 
 ```bash
+cd reference
 cp .env.example .env
 # 编辑 .env 填入你的 DISCORD_TOKEN、DISCORD_GUILD_ID 和 NETA_TOKEN
 ```
@@ -33,6 +34,7 @@ cp .env.example .env
 ### 3. 安装依赖
 
 ```bash
+cd reference
 pnpm install
 # 或 npm install
 ```
@@ -42,7 +44,7 @@ pnpm install
 在 OpenClaw 主 agent 中导入并使用：
 
 ```javascript
-const handler = require('./skills/awakening/direct-handler.js');
+const handler = require('./skills/awakening/reference/direct-handler.js');
 
 const handled = await handler.handleDiscordMessage({
   userId: message.author.id,
@@ -93,14 +95,19 @@ Bot: 我是唐纳德·特朗普，美国第 45 任总统。
 
 ---
 
-## 📁 核心文件
+## 📁 文件结构
 
-| 文件 | 说明 |
-|------|------|
-| `SKILL.md` | 如何执行这个任务 |
-| `direct-handler.js` | 主处理器（核心逻辑） |
-| `discord-profile.js` | Discord 资料更新 |
-| `state.json` | 运行时状态存储 |
+```
+awakening/
+├── SKILL.md                # 技能文档（Agent 必读）
+├── README.md               # 人类快速开始指南
+├── DEPLOY.md               # 部署指南
+└── reference/              # 核心代码和配置
+    ├── direct-handler.js   # 主处理器（核心逻辑）
+    ├── discord-profile.js  # Discord 资料更新
+    ├── package.json        # 依赖配置
+    └── state.json          # 运行时状态存储（自动生成）
+```
 
 ---
 

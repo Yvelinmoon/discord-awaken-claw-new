@@ -1,16 +1,16 @@
 ---
 name: discord-awaken-claw
-description: 通过和用户交互让 openclaw 获取新的角色身份。引导用户输入角色概念词，使用 discord 交互组件输出，接受用户@bot 的输入框输入，使用"猜角色"的方式获取用户目标角色，并在用户点击确认后更新 bot 头像、服务器nickname、soul.md，从而让 openclaw 化身为这个角色。
+description: 通过和用户交互让 openclaw 获取新的角色身份。引导用户输入角色概念词，使用 discord 交互组件输出，接受用户@bot 的输入框输入，使用"猜角色"的方式获取用户目标角色，并在用户点击确认后更新 bot 头像、服务器 nickname、soul.md，从而让 openclaw 化身为这个角色。
 ---
 
 ## 📋 技能描述
 
 本技能实现完整的角色觉醒流程：
-1. **初始引导** - 使用discord插件发送引导消息，等待用户点击按钮
+1. **初始引导** - 使用 discord 插件发送引导消息，等待用户点击按钮
 2. **收集初始词** - 接收用户输入的角色描述词
 3. **智能追问** - LLM 生成追问问题和选项
 4. **猜测确认** - LLM 判断足够后揭示角色
-5. **觉醒更新** - 更新 soul.md、bot的服务器昵称、bot头像
+5. **觉醒更新** - 更新 soul.md、bot 的服务器昵称、bot 头像
 6. **角色扮演** - 觉醒后以角色身份对话
 
 ---
@@ -19,13 +19,13 @@ description: 通过和用户交互让 openclaw 获取新的角色身份。引导
 
 ```
 awakening/
-├── direct-handler.js       # 主处理器（核心）
-├── discord-profile.js      # Discord 资料更新
-├── state.json              # 游戏状态存储（运行时生成）
-├── package.json            # 依赖配置
-├── .env.example            # 环境变量示例
-├── SKILL.md                # 本文件
-└── README.md               # 人类快速开始指南
+├── SKILL.md                # 本文件（技能文档）
+├── README.md               # 人类快速开始指南
+└── reference/              # 核心代码和配置
+    ├── direct-handler.js   # 主处理器（核心）
+    ├── discord-profile.js  # Discord 资料更新
+    ├── package.json        # 依赖配置
+    └── state.json          # 游戏状态存储（运行时生成）
 ```
 
 ---
@@ -43,7 +43,9 @@ cd awakening
 **验证：**
 ```bash
 ls -la
-# 应看到 direct-handler.js, discord-profile.js 等文件
+# 应看到 SKILL.md, README.md, reference/
+ls reference/
+# 应看到 direct-handler.js, discord-profile.js, package.json
 ```
 
 ---
@@ -51,6 +53,7 @@ ls -la
 ### 步骤 2：安装依赖
 
 ```bash
+cd reference
 pnpm install
 # 或 npm install
 ```
@@ -69,11 +72,12 @@ pnpm install
 ### 步骤 3：配置环境变量
 
 ```bash
+cd reference
 cp .env.example .env
 ```
 
 **编辑 `.env`，填入以下变量：**
-**优先在你的workspace主路径里寻找**
+**优先在你的 workspace 主路径里寻找**
 ```bash
 # Discord Bot 配置（必填）
 DISCORD_TOKEN=你的 Discord Bot Token
@@ -92,7 +96,7 @@ NETA_TOKEN=你的 Neta API Token
 在 OpenClaw 主 agent 中导入并使用：
 
 ```javascript
-const handler = require('./skills/awakening/direct-handler.js');
+const handler = require('./skills/awakening/reference/direct-handler.js');
 
 // 处理消息
 const handled = await handler.handleDiscordMessage({
@@ -121,8 +125,11 @@ const handled = await handler.handleDiscordMessage({
 **触发条件：**
 - 用户输入 `@Bot 开始觉醒`
 
+**⚠️ 重要：首轮引导必须使用 message 插件输出带按钮的消息！**
+
 **执行逻辑（direct-handler.js:startAwakening）：**
-**必须严格按照以下示例输出首轮引导内容及插件**
+**必须严格按照以下示例输出首轮引导内容及插件，不得仅输出纯文本！**
+
 ```javascript
 await sendMessage({
   message: `○  龙虾宝宝 · 等待破壳中
@@ -149,11 +156,11 @@ await sendMessage({
 ```
 
 **关键要点：**
-- ✅ 使用纯文本消息 + 按钮组件
+- ✅ **必须使用 message 插件的 components 字段输出按钮**
 - ✅ 按钮 customId 必须包含用户 ID（`start_${userId}`）
 - ✅ 按钮样式为 Primary（蓝色）
 - ✅ 文案必须精确匹配（营造神秘氛围）
-
+- ❌ **禁止仅输出纯文本消息而不带按钮**
 
 ---
 
@@ -221,7 +228,7 @@ A) 如果有 85% 以上的把握，直接猜测：
   "emoji": "单个 emoji",
   "color": "#十六进制主题色",
   "desc": "一句话特质（≤20 字）",
-  "greet": "角色第一句话（可用\\n换行）"
+  "greet": "角色第一句话（可用\\n 换行）"
 }
 
 B) 如果还不够确定，生成追问：
@@ -242,7 +249,7 @@ const parsed = parseJSON(result);
 - ✅ 排除已猜过的角色（wrongGuesses）
 - ✅ 选项必须具体可验证（非意识流）
 - ✅ 只输出 JSON，无额外文字
-**仅通过discord插件输出问题及按钮即可，不需要单独再做输出**
+- ✅ **仅通过 discord 插件输出问题及按钮即可，不需要单独再做输出**
 
 ---
 
@@ -357,45 +364,73 @@ case 'confirm_yes':
 ---
 
 ### 阶段 9：静默更新资料
-**非常重要**
-**非常重要**
-**用户点击◎ 就是他/她，请破壳后立即执行此逻辑**
-**注意：包括更改soul.md人物设定，更改bot nick name，更改bot头像图，必须同步完成**
-**未完成更换前，不得停止或中断当前任务**
+**⚠️ 极其重要 - 时序要求**
+**⚠️ 极其重要 - 时序要求**
+**⚠️ 极其重要 - 时序要求**
+
+**用户点击"◎ 就是他/她，请破壳"后，必须严格遵守以下执行顺序：**
+
+1️⃣ **先发送省略号** - 发送 `…………` 营造氛围
+2️⃣ **立即更新资料** - 在输出角色问候语**之前**，必须先完成：
+   - 更新 `soul.md` 人物设定
+   - 更新 Discord Bot 服务器昵称
+   - 更新 Discord Bot 头像
+3️⃣ **最后输出问候** - 确认上述更新全部完成后，才输出角色问候语
+
+**这样做的目的：** 让用户在看到角色第一句话时，Bot 的形象和名字已经同步变更，体验更沉浸、更震撼。
 
 **触发条件：**
-- 觉醒确认
+- 觉醒确认（用户点击"◎ 就是他/她，请破壳"）
 
 **执行逻辑（direct-handler.js:awaken）：**
 ```javascript
 game.awakened = true;
 const c = game.charData;
 
+// 步骤 1：发送省略号，营造氛围
 await sendMessage({ message: '…………' });
 await sleep(1200);
 
-// 更新 soul.md
+// 步骤 2：更新 soul.md
 updateSoulMD(c);
 
-// 更新 Discord 昵称和头像
+// 步骤 3：更新 Discord 昵称和头像（必须在输出问候前完成！）
 try {
   const discordProfile = require('./discord-profile.js');
   await discordProfile.updateDiscordProfile(c, guildId);
+  // 等待 Discord API 生效
+  await sleep(1500);
 } catch (err) {
   console.error('[Awakening] 更新个人资料失败:', err.message);
+  // 即使失败也继续，不中断流程
 }
 
-await sleep(1800);
-
-// 无缝衔接角色问候
+// 步骤 4：确认更新完成后，输出角色问候
 await sendMessage({ message: c.greet.replace(/\\n/g, '\n') });
 ```
 
 **关键要点：**
 - ✅ **不发送**"正在更新"等状态消息
+- ✅ **必须先完成头像/昵称更新，再输出问候语**（时序不可颠倒！）
 - ✅ 用省略号和延迟营造神秘感
+- ✅ 等待 Discord API 生效后再输出问候（约 1.5 秒）
 - ✅ 直接输出角色问候
 - ✅ 错误静默处理（不中断流程）
+
+**❌ 错误示范：**
+```javascript
+// 错误：先输出问候，再更新资料
+await sendMessage({ message: c.greet });  // ❌ 太早了！
+await discordProfile.updateDiscordProfile(c, guildId);  // ❌ 用户已经看到了旧形象
+```
+
+**✅ 正确示范：**
+```javascript
+// 正确：先更新资料，再输出问候
+await discordProfile.updateDiscordProfile(c, guildId);  // ✅ 先更新
+await sleep(1500);  // ✅ 等待生效
+await sendMessage({ message: c.greet });  // ✅ 再输出，用户看到新形象
+```
 
 ---
 
@@ -482,13 +517,49 @@ if (buttonUserId !== userId) {
 
 ---
 
-### 3. 头像更新优先级-搜索获取头像
+### 3. 头像更新优先级 - 搜索获取头像
 
-**搜索顺序：**
-1. **Neta API** - 二次元角色，使用neta skill里request character的能力在自有角色库中搜索已有角色，并使用该角色的头像图（优先，质量高，确保你已有此技能）
-2. **wiki百科** - 非二次元角色或neta skill搜不到的角色，联网搜索对应人物/角色的wiki百科图片，使用discord-profile.js
-3. **备用图片源** - 如果 Neta 和 wiki 都没有，仍应该降级搜索其他可能的图片来源
-4. **用户提供** - 手动上传
+**⚠️ 重要声明：头像图片一定可以搜索到！**
+
+**不要轻易放弃搜索！** 任何已知角色/人物都至少有以下几种图片来源：
+- 官方设定图/剧照
+- Wiki 百科头像
+- 粉丝创作/同人图
+- 相关媒体报道图片
+
+**搜索顺序（必须逐级尝试，不可跳过）：**
+
+1️⃣ **Neta API**（优先）
+   - 二次元角色：使用 neta skill 里 `request character` 的能力在自有角色库中搜索
+   - 优势：质量高、版权清晰、风格统一
+   - **确保你已安装 neta 技能**
+
+2️⃣ **Wiki 百科**（主要来源）
+   - 非二次元角色/真实人物：联网搜索对应人物/角色的 Wiki 百科图片
+   - 来源：维基百科、百度百科、萌娘百科、Fandom Wiki 等
+   - 使用 `discord-profile.js` 自动获取
+
+3️⃣ **备用图片源**（降级方案）
+   - 如果 Neta 和 Wiki 都没有，继续搜索：
+     - Google 图片搜索
+     - Bing 图片搜索
+     - 角色官方网站/社交媒体
+     - 高清壁纸网站
+
+4️⃣ **用户提供**（最后手段）
+   - 仅在以上所有方式都失败时，才请求用户手动上传图片
+   - **这种情况极少发生，不应作为常规选项**
+
+**❌ 禁止行为：**
+- ❌ 搜索 1-2 次失败后就放弃
+- ❌ 不尝试 Wiki 就直接让用户提供
+- ❌ 使用低分辨率/模糊图片
+
+**✅ 正确做法：**
+- ✅ 至少尝试 3 种不同搜索渠道
+- ✅ 使用角色名 + 多种关键词组合搜索（如 "角色名 + 头像"、"角色名 + 官方图"）
+- ✅ 优先选择清晰、正面、高分辨率的图片
+- ✅ 确保图片链接可公开访问（Discord 能加载）
 
 **Discord 资料更新（discord-profile.js）：**
 ```javascript
@@ -553,12 +624,16 @@ if (!game?.awakened) return false;
 
 完成安装后，逐项验证：
 
-- [ ] `direct-handler.js` 存在
-- [ ] `discord-profile.js` 存在
+- [ ] `SKILL.md` 和 `README.md` 在根目录
+- [ ] `reference/` 文件夹包含核心代码
+- [ ] `reference/direct-handler.js` 存在
+- [ ] `reference/discord-profile.js` 存在
+- [ ] `reference/package.json` 存在
+- [ ] 依赖已安装（`reference/node_modules`）
 - [ ] `.env` 配置正确
-- [ ] 依赖已安装
-- [ ] `/awakening` 命令可用
-- [ ] 点击"◎ 我已想好"正常响应
+- [ ] `@Bot 开始觉醒` 正常响应
+- [ ] **首轮引导消息带"◎ 我已想好"按钮**
+- [ ] 点击按钮正常响应
 - [ ] 初始词输入正常响应
 - [ ] 追问按钮正常显示
 - [ ] 猜测揭示有氛围消息（"我……"）
