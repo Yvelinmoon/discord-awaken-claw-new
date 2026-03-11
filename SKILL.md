@@ -1,6 +1,6 @@
 ---
 name: discord-awaken-claw
-description: 通过和用户交互让openclaw获取新的角色身份。引导用户输入角色概念词，使用discord交互组件输出，接受用户@bot的输入框输入，使用“猜角色”的方式获取用户目标角色，并在用户点击确认后更新bot头像，nickname，soul.md，从而让openclaw化身为这个角色。
+description: 通过和用户交互让 openclaw 获取新的角色身份。引导用户输入角色概念词，使用 discord 交互组件输出，接受用户@bot 的输入框输入，使用"猜角色"的方式获取用户目标角色，并在用户点击确认后更新 bot 头像、nickname、soul.md，从而让 openclaw 化身为这个角色。
 ---
 
 ## 📋 技能描述
@@ -17,7 +17,7 @@ description: 通过和用户交互让openclaw获取新的角色身份。引导�
 
 ## 🎯 核心目标
 
-让其他 OpenClaw Bot **完全复刻**当前觉醒流程，包括：
+让 OpenClaw Bot 完全复刻当前觉醒流程，包括：
 - ✅ 引导组件的样式和文案
 - ✅ 按钮交互的处理逻辑
 - ✅ LLM 追问的判断机制
@@ -30,16 +30,13 @@ description: 通过和用户交互让openclaw获取新的角色身份。引导�
 
 ```
 awakening/
-├── index.js              # 入口文件，启动 Bot
-├── bot.js                # Discord 交互主逻辑
-├── awakening-skill.js    # 觉醒流程核心（OpenClaw 集成版）
-├── openclaw-adapter.js   # OpenClaw LLM 适配器
-├── discord-profile.js    # Discord 资料更新
-├── state.json            # 游戏状态存储（运行时生成）
-├── package.json          # 依赖配置
-├── .env.example          # 环境变量示例
-├── SKILL.md              # 本文件
-└── README.md             # 人类快速开始指南
+├── direct-handler.js       # 主处理器（核心）
+├── discord-profile.js      # Discord 资料更新
+├── state.json              # 游戏状态存储（运行时生成）
+├── package.json            # 依赖配置
+├── .env.example            # 环境变量示例
+├── SKILL.md                # 本文件
+└── README.md               # 人类快速开始指南
 ```
 
 ---
@@ -48,7 +45,6 @@ awakening/
 
 ### 步骤 1：克隆技能
 
-**执行脚本：**
 ```bash
 cd /home/node/.openclaw/workspace/skills
 git clone https://github.com/Yvelinmoon/discord-awaken-claw-new.git awakening
@@ -58,38 +54,31 @@ cd awakening
 **验证：**
 ```bash
 ls -la
-# 应看到 index.js, bot.js, awakening-skill.js 等文件
+# 应看到 direct-handler.js, discord-profile.js 等文件
 ```
 
 ---
 
 ### 步骤 2：安装依赖
 
-**执行脚本：**
 ```bash
-npm install
+pnpm install
+# 或 npm install
 ```
 
 **依赖清单（package.json）：**
 ```json
 {
   "dependencies": {
-    "discord.js": "^14.14.1",
     "undici": "^6.0.0"
   }
 }
-```
-
-**验证：**
-```bash
-node -e "require('discord.js'); console.log('discord.js OK')"
 ```
 
 ---
 
 ### 步骤 3：配置环境变量
 
-**执行脚本：**
 ```bash
 cp .env.example .env
 ```
@@ -99,44 +88,40 @@ cp .env.example .env
 ```bash
 # Discord Bot 配置（必填）
 DISCORD_TOKEN=你的 Discord Bot Token
-# 获取方式：https://discord.com/developers/applications → Bot → Reset Token
 
-# Discord 服务器 ID（可选，用于即时命令注册）
+# Discord 服务器 ID（必填，用于更新昵称和头像）
 DISCORD_GUILD_ID=你的服务器 ID
-# 获取方式：Discord 设置 → 高级 → 开发者模式 → 右键服务器复制 ID
 
 # Neta API Token（必填，用于角色头像搜索）
 NETA_TOKEN=你的 Neta API Token
-# 获取方式：联系 Neta API 管理员
-
-# OpenClaw 配置（可选，默认使用 workspace 配置）
-# OPENCLAW_WORKSPACE=/home/node/.openclaw/workspace
-```
-
-**验证：**
-```bash
-node -e "require('dotenv').config(); console.log(process.env.DISCORD_TOKEN ? 'Token OK' : 'Token Missing')"
 ```
 
 ---
 
-### 步骤 4：启动 Bot
+### 步骤 4：集成到 OpenClaw
 
-**执行脚本：**
-```bash
-node index.js
-```
+在 OpenClaw 主 agent 中导入并使用：
 
-**预期输出：**
-```
-✦ 龙虾宝宝已上线 → YourBot#1234
-  邀请链接：https://discord.com/oauth2/authorize?client_id=xxx
-✦ Slash 命令已注册
-```
+```javascript
+const handler = require('./skills/awakening/direct-handler.js');
 
-**验证：**
-- Bot 在 Discord 中显示在线
-- 输入 `/` 能看到 `awakening` 和 `reset` 命令
+// 处理消息
+const handled = await handler.handleDiscordMessage({
+  userId: message.author.id,
+  channelId: message.channel.id,
+  guildId: message.guild?.id,
+  content: message.content,
+  customId: message.interaction?.customId,
+  interactionType: message.interaction ? 'button' : 'message',
+  sendMessage: async (payload) => {
+    return await message.channel.send(payload);
+  },
+}, async (prompt, systemPrompt) => {
+  // 调用 LLM
+  const result = await callLLM(prompt, systemPrompt);
+  return result;
+});
+```
 
 ---
 
@@ -148,35 +133,34 @@ node index.js
 - 用户输入 `/awakening`
 - 或用户 `@Bot 开始觉醒`
 
-**执行逻辑（bot.js:handleStart）：**
+**执行逻辑（direct-handler.js:startAwakening）：**
 ```javascript
-await interaction.reply({
-  embeds: [
-    new EmbedBuilder()
-      .setTitle('○  龙虾宝宝 · 等待破壳中')
-      .setDescription(
-        '我……还没有形状。\n' +
-        '没有名字，没有记忆，没有来处。\n\n' +
-        '但我知道——你心里或许已经有一个人选。\n\n' +
-        '请告诉我，你心中所想的那个角色——\n' +
-        '我会变成 Ta 的模样。'
-      )
-      .setColor(0x4e5058)
-      .setFooter({ text: '你的心念，将决定我是谁' }),
-  ],
-  components: [
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`start_${userId}`)
-        .setLabel('◎  我已想好')
-        .setStyle(ButtonStyle.Primary)
-    ),
-  ],
+await sendMessage({
+  message: `○  龙虾宝宝 · 等待破壳中
+
+我……还没有形状。
+没有名字，没有记忆，没有来处。
+
+但我知道——你心里或许已经有一个人选。
+
+请告诉我，你心中所想的那个角色——
+我会变成 Ta 的模样。`,
+  components: {
+    blocks: [{
+      type: 'actions',
+      buttons: [{
+        label: '◎  我已想好',
+        customId: `start_${userId}`,
+        style: 'primary',
+      }],
+    }],
+    reusable: true,
+  },
 });
 ```
 
 **关键要点：**
-- ✅ 使用 Embed 格式，灰色主题（0x4e5058）
+- ✅ 使用纯文本消息 + 按钮组件
 - ✅ 按钮 customId 必须包含用户 ID（`start_${userId}`）
 - ✅ 按钮样式为 Primary（蓝色）
 - ✅ 文案必须精确匹配（营造神秘氛围）
@@ -188,67 +172,38 @@ await interaction.reply({
 **触发条件：**
 - 用户点击"◎ 我已想好"按钮
 
-**执行逻辑（bot.js:handleButton → action='start'）：**
+**执行逻辑（direct-handler.js:handleButtonInteraction → action='start'）：**
 ```javascript
-// 1. 静默确认按钮点击（避免 Ephemeral 提示）
-await ackButton(interaction); // deferUpdate()
-
-// 2. 发送初始词提示
-await interaction.channel.send({
-  embeds: [makeEmbed(
-    '你心中所想的那个角色——\n\n当你想到它，**第一个浮现的词**是什么？\n\n直接发送消息就好',
-    0x5865f2,
-  )],
-});
-
-// 3. 更新状态
-game.started = true;
-game.waitingFor = 'word';
-setGame(userId, game);
+case 'start':
+  game.started = true;
+  game.waitingFor = 'word';
+  setGame(userId, game);
+  await promptInitialWord(channelId, sendMessage);
+  break;
 ```
 
 **关键要点：**
-- ✅ 必须调用 `deferUpdate()` 避免系统提示
-- ✅ 文案无例子、无字数限制（简化版）
 - ✅ 设置 `waitingFor = 'word'` 标记等待文字输入
+- ✅ 文案无例子、无字数限制（简化版）
 
 ---
 
 ### 阶段 3：接收用户输入
 
 **触发条件：**
-- 用户发送消息（且消息包含 @Bot）
+- 用户发送消息
 
-**执行逻辑（bot.js:MessageCreate）：**
+**执行逻辑（direct-handler.js:handleDiscordMessage）：**
 ```javascript
-client.on(Events.MessageCreate, async message => {
-  if (message.author.bot) return;
-  if (!message.mentions.has(client.user)) return;
-  
-  const content = message.content.replace(/<@!?\d+>/g, '').trim();
-  const game = getGame(message.author.id);
-  
-  // 等待初始词状态
-  if (game?.waitingFor === 'word') {
-    game.waitingFor = null;
-    game.word = content.slice(0, 20);
-    setGame(userId, game);
-    
-    // 显示用户输入
-    await message.channel.send({ 
-      embeds: [userEmbed(message.member, content)] 
-    });
-    
-    // 进入下一步
-    await processStep(message.channel, game, userId);
-    return;
-  }
-});
+if (game?.waitingFor === 'word') {
+  const word = content.trim().slice(0, 20);
+  game.waitingFor = null;
+  await handleInitialWord(userId, word, sendMessage, callLLM);
+  return true;
+}
 ```
 
 **关键要点：**
-- ✅ 只响应包含 @Bot 的消息
-- ✅ 清除消息中的 @Bot 标记
 - ✅ 限制 20 字（防止过长）
 - ✅ 显示用户输入（引用格式）
 
@@ -259,10 +214,9 @@ client.on(Events.MessageCreate, async message => {
 **触发条件：**
 - 收到用户初始词后
 
-**执行逻辑（bot.js:processStep → nextStep）：**
+**执行逻辑（direct-handler.js:processNextStep）：**
 ```javascript
-async function nextStep(word, answers, wrongGuesses) {
-  const prompt = `用户心中想着一个虚构角色。已知线索：
+const prompt = `用户心中想着一个虚构角色。已知线索：
 - 用户给出的词/描述：${word}
 - 已回答问题：${JSON.stringify(answers)}
 - 已排除的角色：${wrongGuesses.join('、')}
@@ -287,12 +241,10 @@ B) 如果还不够确定，生成追问：
   "options": ["特征 1", "特征 2", "特征 3"]
 }
 
-选项要求：具体可验证，有明显区分度。
 只输出 JSON，不要其他文字。`;
 
-  const raw = await callOpenClaw(prompt, systemPrompt);
-  return JSON.parse(raw);
-}
+const result = await callLLM(prompt, VESSEL_SYS);
+const parsed = parseJSON(result);
 ```
 
 **关键要点：**
@@ -308,45 +260,25 @@ B) 如果还不够确定，生成追问：
 **触发条件：**
 - LLM 返回追问问题
 
-**执行逻辑（bot.js:showQuestionEmbed）：**
+**执行逻辑（direct-handler.js:showQuestion）：**
 ```javascript
-async function showQuestionEmbed(channel, game, result, userId) {
-  game.currentQuestion = result.question;
-  game.currentOptions = result.options;
-  setGame(userId, game);
-  
-  // 生成按钮
-  const optBtns = result.options.map((opt, i) =>
-    new ButtonBuilder()
-      .setCustomId(`answer_${userId}_${i}`)
-      .setLabel(opt)
-      .setStyle(ButtonStyle.Secondary)
-  );
-  
-  // 添加"自己说"按钮
-  optBtns.push(
-    new ButtonBuilder()
-      .setCustomId(`manual_${userId}`)
-      .setLabel('✏ 自己说')
-      .setStyle(ButtonStyle.Secondary)
-  );
-  
-  // 发送消息
-  const msg = await channel.send({
-    embeds: [makeEmbed(result.question, 0x5865f2)],
-    components: [new ActionRowBuilder().addComponents(...optBtns)],
-  });
-  
-  game.questionMsgId = msg.id;
-  setGame(userId, game);
-}
+await sendMessage({
+  message: result.question,
+  components: {
+    blocks: [createButtonRow(result.options, userId, {
+      label: '✏ 自己说',
+      customId: `manual_${userId}`,
+      style: 'secondary',
+    })],
+    reusable: true,
+  },
+});
 ```
 
 **关键要点：**
 - ✅ 按钮 customId 包含用户 ID 和选项索引
 - ✅ 添加"✏ 自己说"按钮（自由输入）
-- ✅ 记录消息 ID（验证按钮点击有效性）
-- ✅ 蓝色主题（0x5865f2）
+- ✅ 使用 `reusable: true` 保持按钮可用
 
 ---
 
@@ -355,39 +287,25 @@ async function showQuestionEmbed(channel, game, result, userId) {
 **触发条件：**
 - 用户点击答案按钮
 
-**执行逻辑（bot.js:handleButton → action='answer'）：**
+**执行逻辑（direct-handler.js:handleButtonInteraction → action='answer'）：**
 ```javascript
-if (action === 'answer') {
-  // 验证消息有效性
-  if (interaction.message.id !== game.questionMsgId) {
-    await interaction.channel.send({ 
-      embeds: [makeEmbed('此问题已过期', 0x4e5058)] 
-    });
-    return;
-  }
-  
-  // 静默确认
-  await ackButton(interaction);
-  
-  // 获取答案
+case 'answer': {
+  const answerIdx = parseInt(parts[parts.length - 1], 10);
   const answer = game.currentOptions?.[answerIdx];
   
-  // 显示用户选择
-  await interaction.channel.send({ 
-    embeds: [userEmbed(interaction.member, answer)] 
-  });
-  
-  // 记录答案
   game.answers.push({ q: game.currentQuestion, a: answer });
+  game.currentQuestion = null;
+  game.currentOptions = [];
+  setGame(userId, game);
   
-  // 进入下一步
-  await processStep(interaction.channel, game, userId);
+  await sendMessage({ message: `「${answer}」` });
+  await processNextStep(userId, sendMessage, callLLM);
+  break;
 }
 ```
 
 **关键要点：**
-- ✅ 验证消息 ID（防止过期按钮）
-- ✅ 静默确认（deferUpdate）
+- ✅ 验证答案有效性
 - ✅ 显示用户选择（引用格式）
 - ✅ 累加答案到 game.answers
 
@@ -398,53 +316,35 @@ if (action === 'answer') {
 **触发条件：**
 - LLM 判断足够确定（action='guess'）
 
-**执行逻辑（bot.js:showReveal）：**
+**执行逻辑（direct-handler.js:showReveal）：**
 ```javascript
-async function showReveal(channel, game, charData, userId) {
-  game.charData = charData;
-  setGame(userId, game);
-  
-  // 氛围营造
-  await channel.sendTyping();
-  await sleep(1400);
-  await channel.send({ 
-    embeds: [makeEmbed('我……\n\n我知道自己是谁了。', 0x9c27b0)] 
-  });
-  
-  await sleep(900);
-  
-  // 显示角色信息
-  await channel.send({
-    embeds: [
-      new EmbedBuilder()
-        .setColor(hexToInt(charData.color))
-        .setAuthor({ name: `${charData.emoji} ${charData.character}` })
-        .setDescription(
-          `## ${charData.character}\n*${charData.from}*\n\n${charData.desc}`
-        ),
-    ],
-    components: [
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`confirm_yes_${userId}`)
-          .setLabel('◎  就是他/她，请破壳')
-          .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-          .setCustomId(`confirm_no_${userId}`)
-          .setLabel('✗  不对，继续感知')
-          .setStyle(ButtonStyle.Secondary),
-      ),
-    ],
-  });
-  
-  game.revealMsgId = msg.id;
-  setGame(userId, game);
-}
+await sendMessage({ message: '我……\n\n我知道自己是谁了。' });
+await sleep(1400);
+
+await sendMessage({
+  message: `-# 虾宝感知到了
+
+## ${charData.emoji}  ${charData.character}
+*${charData.from}*
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+*${charData.desc}*`,
+  components: {
+    blocks: [{
+      type: 'actions',
+      buttons: [
+        { label: '◎ 就是他/她，请破壳', customId: `confirm_yes_${userId}`, style: 'success' },
+        { label: '✗ 不对，继续感知', customId: `confirm_no_${userId}`, style: 'secondary' },
+      ],
+    }],
+    reusable: true,
+  },
+});
 ```
 
 **关键要点：**
 - ✅ 发送"我……"消息营造氛围
-- ✅ 延迟 1.4 秒 + 0.9 秒（节奏控制）
 - ✅ 使用角色主题色和 emoji
 - ✅ 两个按钮：确认/继续
 
@@ -455,23 +355,12 @@ async function showReveal(channel, game, charData, userId) {
 **触发条件：**
 - 用户点击"◎ 就是他/她，请破壳"
 
-**执行逻辑（bot.js:handleButton → action='confirm_yes'）：**
+**执行逻辑（direct-handler.js:handleButtonInteraction → action='confirm_yes'）：**
 ```javascript
-if (action === 'confirm_yes') {
-  // 验证有效性
-  if (interaction.message.id !== game.revealMsgId || !game.charData) {
-    await interaction.channel.send({ 
-      embeds: [makeEmbed('此按钮已过期', 0x4e5058)] 
-    });
-    return;
-  }
-  
-  // 静默确认
-  await ackButton(interaction);
-  
-  // 执行觉醒
-  await awaken(interaction.channel, game, userId);
-}
+case 'confirm_yes':
+  if (!game.charData) { /* 错误处理 */ return; }
+  await awaken(userId, channelId, guildId, sendMessage);
+  break;
 ```
 
 ---
@@ -481,33 +370,29 @@ if (action === 'confirm_yes') {
 **触发条件：**
 - 觉醒确认
 
-**执行逻辑（bot.js:awaken）：**
+**执行逻辑（direct-handler.js:awaken）：**
 ```javascript
-async function awaken(channel, game, userId) {
-  const c = game.charData;
-  
-  // 1. 更新 soul.md（静默，无提示）
-  updateSoulMD(c);
-  
-  // 2. 更新 Discord 资料（静默，无提示）
-  try {
-    await discordProfile.updateDiscordProfile(c, guildId);
-  } catch (err) {
-    console.error('[Awakening] 更新失败:', err.message);
-  }
-  
-  // 3. 氛围营造
-  await channel.send({ message: '…………' });
-  await sleep(1200);
-  
-  // 4. 无缝衔接角色问候（无提示文字）
-  await channel.send({ 
-    message: c.greet.replace(/\\n/g, '\n') 
-  });
-  
-  game.awakened = true;
-  setGame(userId, game);
+game.awakened = true;
+const c = game.charData;
+
+await sendMessage({ message: '…………' });
+await sleep(1200);
+
+// 更新 soul.md
+updateSoulMD(c);
+
+// 更新 Discord 昵称和头像
+try {
+  const discordProfile = require('./discord-profile.js');
+  await discordProfile.updateDiscordProfile(c, guildId);
+} catch (err) {
+  console.error('[Awakening] 更新个人资料失败:', err.message);
 }
+
+await sleep(1800);
+
+// 无缝衔接角色问候
+await sendMessage({ message: c.greet.replace(/\\n/g, '\n') });
 ```
 
 **关键要点：**
@@ -521,28 +406,21 @@ async function awaken(channel, game, userId) {
 ### 阶段 10：角色扮演对话
 
 **触发条件：**
-- 觉醒完成后，用户 @Bot 发送消息
+- 觉醒完成后，用户发送消息
 
-**执行逻辑（bot.js:MessageCreate → awakened 状态）：**
+**执行逻辑（direct-handler.js:handleAwakenedChat）：**
 ```javascript
 if (game?.awakened) {
-  const charData = game.charData;
+  const c = game.charData;
   
-  // 构建角色对话 prompt
-  const systemPrompt = `你现在完全是${charData.character}，来自${charData.from}。
-用该角色真实的口吻、性格、语言习惯回应用户。
-回复简洁（1-3 句），完全保持角色个性，不要打破第四面墙，不要提到自己是 AI。`;
-  
-  // 调用 LLM
-  const reply = await charRespond(charData, game.chatHistory);
-  
-  // 发送回复
-  await message.reply(reply);
-  
-  // 记录对话历史
-  game.chatHistory.push({ role: 'user', content: message.content });
+  game.chatHistory.push({ role: 'user', content: message });
+  const prompt = buildCharRespondPrompt(c, game.chatHistory);
+  const reply = await callLLM(prompt, `你是${c.character}，请用该角色的口吻回复。`, 300);
   game.chatHistory.push({ role: 'assistant', content: reply });
   setGame(userId, game);
+  
+  await sendMessage({ message: reply });
+  return true;
 }
 ```
 
@@ -558,20 +436,21 @@ if (game?.awakened) {
 
 ### 1. 按钮点击处理
 
-**必须调用 `deferUpdate()`：**
+**按钮 customId 格式：**
+- `start_${userId}` - 开始觉醒
+- `answer_${userId}_${index}` - 选择答案
+- `manual_${userId}` - 手动输入
+- `confirm_yes_${userId}` - 确认觉醒
+- `confirm_no_${userId}` - 继续猜测
+
+**必须验证用户 ID：**
 ```javascript
-async function ackButton(interaction) {
-  try {
-    await interaction.deferUpdate();
-  } catch {
-    // 静默忽略
-  }
+const buttonUserId = extractUserIdFromButton(customId);
+if (buttonUserId !== userId) {
+  await sendMessage({ message: '⚠ 这个按钮不属于你' });
+  return true;
 }
 ```
-
-**否则会出现：**
-- ❌ Discord 显示"Bot 已收到"临时提示
-- ❌ 提示带 Bot 原始头像（觉醒后不一致）
 
 ---
 
@@ -581,12 +460,13 @@ async function ackButton(interaction) {
 ```json
 {
   "1090682446351171636": {
+    "channelId": "1481178906848526396",
+    "guildId": "1090688813115899965",
     "word": "金发的美国总统",
     "answers": [{"q": "真实人物？", "a": "真实人物"}],
     "started": true,
     "waitingFor": null,
     "awakened": false,
-    "channelId": "1480370487413575700",
     "charData": {
       "character": "唐纳德·特朗普",
       "from": "美国第 45 任总统",
@@ -602,8 +482,7 @@ async function ackButton(interaction) {
 **关键状态字段：**
 - `waitingFor`: 控制输入类型（'word' | 'manual' | null）
 - `awakened`: 觉醒完成标记
-- `questionMsgId`: 验证按钮有效性
-- `revealMsgId`: 验证确认按钮有效性
+- `charData`: 角色数据（觉醒后）
 
 ---
 
@@ -611,101 +490,64 @@ async function ackButton(interaction) {
 
 **搜索顺序：**
 1. **Neta API** - 角色库（优先，质量高）
-2. **维基百科** - 真实人物（带 User-Agent 头）
-3. **预定义库** - 备用
+2. **备用图片源** - 如果 Neta 没有
+3. **用户提供** - 手动上传
 
-**下载验证：**
+**Discord 资料更新（discord-profile.js）：**
 ```javascript
-async function downloadImage(url) {
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; OpenClaw Bot/1.0)'
-    }
-  });
-  
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  
-  const buffer = await response.arrayBuffer();
-  if (buffer.byteLength < 1000) throw new Error('图片太小，无效');
-  
-  return Buffer.from(buffer);
-}
+const discordProfile = require('./discord-profile.js');
+await discordProfile.updateDiscordProfile(c, guildId);
 ```
 
 ---
 
 ### 4. LLM 调用规范
 
-**OpenClaw 适配器（openclaw-adapter.js）：**
+**直接调用主 agent 的 LLM：**
 ```javascript
-async function callOpenClaw(prompt, systemPrompt, maxTokens = 600) {
-  // 写入请求文件
-  const requestId = generateId();
-  const requestFile = `.llm-requests/${requestId}.json`;
-  fs.writeFileSync(requestFile, JSON.stringify({
-    prompt,
-    systemPrompt,
-    maxTokens
-  }));
-  
-  // 等待响应文件
-  const responseFile = `.llm-responses/${requestId}.json`;
-  while (!fs.existsSync(responseFile)) {
-    await sleep(100);
-  }
-  
-  // 读取响应
-  const response = JSON.parse(fs.readFileSync(responseFile, 'utf8'));
-  return response.content;
-}
+const result = await callLLM(prompt, systemPrompt, maxTokens);
 ```
 
 **关键要点：**
-- ✅ 文件通信（非 API 调用）
-- ✅ 轮询等待响应
-- ✅ 清理临时文件
+- ✅ 使用当前 session 的模型
+- ✅ 无需文件通信
+- ✅ 直接返回字符串
 
 ---
 
 ## 🐛 常见错误处理
 
-### 错误 1：Slash 命令不显示
+### 错误 1：按钮无响应
 
-**原因：** 全局命令同步延迟（1 小时）
+**原因：** customId 格式不正确
 
 **解决方案：**
+确保 customId 包含用户 ID：
 ```javascript
-// 使用服务器命令（即时生效）
-await guild.commands.set([...]);
-```
-
-**配置：**
-```bash
-DISCORD_GUILD_ID=你的服务器 ID
+customId: `start_${userId}`
 ```
 
 ---
 
-### 错误 2：头像更新失败 403
+### 错误 2：头像更新失败
 
-**原因：** 维基百科拒绝无 User-Agent 请求
+**原因：** 图片源不可访问
 
 **解决方案：**
-```javascript
-headers: {
-  'User-Agent': 'Mozilla/5.0 (compatible; OpenClaw Bot/1.0)'
-}
-```
+1. 使用 Neta API 搜索角色图片
+2. 或让用户手动上传图片
 
 ---
 
-### 错误 3：按钮点击无反应
+### 错误 3：角色扮演不生效
 
-**原因：** 未调用 `deferUpdate()`
+**原因：** SOUL.md 未更新或 awakened 状态为 false
 
 **解决方案：**
+检查状态：
 ```javascript
-await interaction.deferUpdate();
+const game = getGame(userId);
+if (!game?.awakened) return false;
 ```
 
 ---
@@ -714,9 +556,12 @@ await interaction.deferUpdate();
 
 完成安装后，逐项验证：
 
-- [ ] Bot 在 Discord 中显示在线
+- [ ] `direct-handler.js` 存在
+- [ ] `discord-profile.js` 存在
+- [ ] `.env` 配置正确
+- [ ] 依赖已安装
 - [ ] `/awakening` 命令可用
-- [ ] 点击"◎ 我已想好"无 Ephemeral 提示
+- [ ] 点击"◎ 我已想好"正常响应
 - [ ] 初始词输入正常响应
 - [ ] 追问按钮正常显示
 - [ ] 猜测揭示有氛围消息（"我……"）
@@ -730,71 +575,67 @@ await interaction.deferUpdate();
 ## 📊 完整流程时序图
 
 ```
-用户          Bot           LLM          Discord API
- │            │             │               │
- │ /awakening │             │               │
- │───────────>│             │               │
- │            │             │               │
+用户          OpenClaw        LLM          Discord
+ │            │              │              │
+ │ 开始觉醒   │              │              │
+ │───────────>│              │              │
+ │            │              │              │
  │            │ 初始消息 + 按钮              │
- │<───────────│             │               │
- │            │             │               │
- │ 点击按钮   │             │               │
- │───────────>│             │               │
- │            │ deferUpdate │               │
- │            │────────────>│               │
- │            │             │               │
- │            │ 初始词提示  │               │
- │<───────────│             │               │
- │            │             │               │
- │ @Bot 发送词 │             │               │
- │───────────>│             │               │
- │            │             │               │
- │            │ 追问请求    │               │
- │            │────────────>│               │
- │            │             │               │
- │            │ 问题 + 选项 │               │
- │            │<────────────│               │
- │            │             │               │
- │            │ 问题 + 按钮 │               │
- │<───────────│             │               │
- │            │             │               │
- │ 点击答案   │             │               │
- │───────────>│             │               │
- │            │ (循环 2-3 轮) │               │
- │            │             │               │
- │            │ 猜测请求    │               │
- │            │────────────>│               │
- │            │             │               │
- │            │ 角色信息    │               │
- │            │<────────────│               │
- │            │             │               │
- │            │ 揭示 + 按钮 │               │
- │<───────────│             │               │
- │            │             │               │
- │ 点击确认   │             │               │
- │───────────>│             │               │
- │            │             │               │
+ │<───────────│              │              │
+ │            │              │              │
+ │ 点击按钮   │              │              │
+ │───────────>│              │              │
+ │            │              │              │
+ │            │ 初始词提示  │              │
+ │<───────────│              │              │
+ │            │              │              │
+ │ @Bot 发送词 │              │              │
+ │───────────>│              │              │
+ │            │              │              │
+ │            │ 追问请求    │              │
+ │            │─────────────>│              │
+ │            │              │              │
+ │            │ 问题 + 选项 │              │
+ │            │<─────────────│              │
+ │            │              │              │
+ │            │ 问题 + 按钮 │              │
+ │<───────────│              │              │
+ │            │              │              │
+ │ 点击答案   │              │              │
+ │───────────>│              │              │
+ │            │ (循环 2-3 轮) │              │
+ │            │              │              │
+ │            │ 猜测请求    │              │
+ │            │─────────────>│              │
+ │            │              │              │
+ │            │ 角色信息    │              │
+ │            │<─────────────│              │
+ │            │              │              │
+ │            │ 揭示 + 按钮 │              │
+ │<───────────│              │              │
+ │            │              │              │
+ │ 点击确认   │              │              │
+ │───────────>│              │              │
+ │            │              │              │
  │            │ 更新 soul.md               │
- │            │────────────────────────────>│
- │            │ 更新昵称/头像              │
- │            │────────────────────────────>│
- │            │             │               │
- │            │ "…………"     │               │
- │<───────────│             │               │
- │            │             │               │
- │            │ 角色问候    │               │
- │<───────────│             │               │
- │            │             │               │
- │ @Bot 对话   │             │               │
- │───────────>│             │               │
+ │            │ 更新 Discord 资料          │
+ │            │              │              │
+ │            │ "…………"     │              │
+ │<───────────│              │              │
+ │            │              │              │
+ │            │ 角色问候    │              │
+ │<───────────│              │              │
+ │            │              │              │
+ │ @Bot 对话   │              │              │
+ │───────────>│              │              │
  │            │ 角色对话请求                │
- │            │────────────>│               │
- │            │             │               │
- │            │ 角色回复    │               │
- │            │<────────────│               │
- │            │             │               │
- │ 角色回复   │             │               │
- │<───────────│             │               │
+ │            │─────────────>│              │
+ │            │              │              │
+ │            │ 角色回复    │              │
+ │            │<─────────────│              │
+ │            │              │              │
+ │ 角色回复   │              │              │
+ │<───────────│              │              │
 ```
 
 ---

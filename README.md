@@ -28,19 +28,37 @@ cd awakening
 
 ```bash
 cp .env.example .env
-# 编辑 .env 填入你的 DISCORD_TOKEN 和 NETA_TOKEN
+# 编辑 .env 填入你的 DISCORD_TOKEN、DISCORD_GUILD_ID 和 NETA_TOKEN
 ```
 
 ### 3. 安装依赖
 
 ```bash
-npm install
+pnpm install
+# 或 npm install
 ```
 
-### 4. 启动 Bot
+### 4. 集成到 OpenClaw
 
-```bash
-node index.js
+在 OpenClaw 主 agent 中导入并使用：
+
+```javascript
+const handler = require('./skills/awakening/direct-handler.js');
+
+const handled = await handler.handleDiscordMessage({
+  userId: message.author.id,
+  channelId: message.channel.id,
+  guildId: message.guild?.id,
+  content: message.content,
+  customId: message.interaction?.customId,
+  interactionType: message.interaction ? 'button' : 'message',
+  sendMessage: async (payload) => {
+    return await message.channel.send(payload);
+  },
+}, async (prompt, systemPrompt) => {
+  const result = await callLLM(prompt, systemPrompt);
+  return result;
+});
 ```
 
 ### 5. 测试觉醒
@@ -73,6 +91,17 @@ Bot: ## 🇺🇸 唐纳德·特朗普
 
 Bot: 我是唐纳德·特朗普，美国第 45 任总统。
 ```
+
+---
+
+## 📁 核心文件
+
+| 文件 | 说明 |
+|------|------|
+| `direct-handler.js` | 主处理器（核心逻辑） |
+| `discord-profile.js` | Discord 资料更新 |
+| `state.json` | 运行时状态存储 |
+| `.env` | 环境配置 |
 
 ---
 
