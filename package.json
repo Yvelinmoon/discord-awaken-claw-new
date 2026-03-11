@@ -1,0 +1,30 @@
+{
+  "name": "discord-awaken-claw",
+  "version": "1.0.0",
+  "description": "🦞 龙虾宝宝觉醒技能 - 完整的角色觉醒流程",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "awakening",
+    "roleplay",
+    "openclaw"
+  ],
+  "author": "Yves",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "undici": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yvelinmoon/discord-awaken-claw-new.git"
+  }
+}
