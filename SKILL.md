@@ -119,8 +119,7 @@ const handled = await handler.handleDiscordMessage({
 ### 阶段 1：初始引导
 
 **触发条件：**
-- 用户输入 `/awakening`
-- 或用户 `@Bot 开始觉醒`
+- 用户输入 `@Bot 开始觉醒`
 
 **执行逻辑（direct-handler.js:startAwakening）：**
 **必须严格按照以下示例输出首轮引导内容及插件**
