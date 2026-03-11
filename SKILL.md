@@ -15,17 +15,6 @@ description: 通过和用户交互让 openclaw 获取新的角色身份。引导
 
 ---
 
-## 🎯 核心目标
-
-让 OpenClaw Bot 完全复刻当前觉醒流程，包括：
-- ✅ 引导组件的样式和文案
-- ✅ 按钮交互的处理逻辑
-- ✅ LLM 追问的判断机制
-- ✅ 资料更新的静默执行
-- ✅ 角色问候的无缝衔接
-
----
-
 ## 📁 文件结构
 
 ```
@@ -84,7 +73,7 @@ cp .env.example .env
 ```
 
 **编辑 `.env`，填入以下变量：**
-
+**优先在你的workspace主路径里寻找**
 ```bash
 # Discord Bot 配置（必填）
 DISCORD_TOKEN=你的 Discord Bot Token
@@ -252,6 +241,7 @@ const parsed = parseJSON(result);
 - ✅ 排除已猜过的角色（wrongGuesses）
 - ✅ 选项必须具体可验证（非意识流）
 - ✅ 只输出 JSON，无额外文字
+**仅通过discord插件输出问题及按钮即可，不需要单独再做输出**
 
 ---
 
