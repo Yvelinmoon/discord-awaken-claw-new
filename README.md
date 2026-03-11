@@ -9,7 +9,6 @@
 - 🎮 **完整觉醒流程** - 从初始词到角色扮演的无缝体验
 - 🤖 **LLM 智能追问** - 动态生成问题和选项，2-3 轮即可猜中
 - 🎨 **自动更新资料** - soul.md、Discord 昵称、头像一键更新
-- 🚫 **无干扰体验** - 无 Ephemeral 提示，无多余状态消息
 - 🔄 **混合交互** - 按钮选择 + @Bot 文字输入，流畅自然
 
 ---
@@ -63,7 +62,7 @@ const handled = await handler.handleDiscordMessage({
 
 ### 5. 测试觉醒
 
-在 Discord 中输入 `/awakening` 或 `@Bot 开始觉醒`
+在 Discord 中输入 `@Bot 开始觉醒`
 
 ---
 
@@ -98,10 +97,10 @@ Bot: 我是唐纳德·特朗普，美国第 45 任总统。
 
 | 文件 | 说明 |
 |------|------|
+| `SKILL.md` | 如何执行这个任务 |
 | `direct-handler.js` | 主处理器（核心逻辑） |
 | `discord-profile.js` | Discord 资料更新 |
 | `state.json` | 运行时状态存储 |
-| `.env` | 环境配置 |
 
 ---
 
