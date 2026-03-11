@@ -483,8 +483,8 @@ if (buttonUserId !== userId) {
 ### 3. 头像更新优先级
 
 **搜索顺序：**
-1. **Neta API** - 角色库（优先，质量高）
-2. **wiki百科** - 联网搜索对应人物/角色的wiki百科图片，使用discord-profile.js
+1. **Neta API** - 二次元角色，使用neta skill里request character的能力在自有角色库中搜索（优先，质量高，确保你已有此技能）
+2. **wiki百科** - 非二次元角色或neta skill搜不到的角色，联网搜索对应人物/角色的wiki百科图片，使用discord-profile.js
 3. **备用图片源** - 如果 Neta 和 wiki 都没有，仍应该降级搜索其他可能的图片来源
 4. **用户提供** - 手动上传
 
