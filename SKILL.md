@@ -356,6 +356,7 @@ case 'confirm_yes':
 ---
 
 ### 阶段 9：静默更新资料
+**注意：包括更改soul.md人物设定，更改bot nick name，更改bot头像图，必须同步完成**
 
 **触发条件：**
 - 觉醒确认
@@ -480,8 +481,9 @@ if (buttonUserId !== userId) {
 
 **搜索顺序：**
 1. **Neta API** - 角色库（优先，质量高）
-2. **备用图片源** - 如果 Neta 没有
-3. **用户提供** - 手动上传
+2. **wiki百科** - 联网搜索对应人物/角色的wiki百科图片，使用discord-profile.js
+3. **备用图片源** - 如果 Neta 和 wiki 都没有，仍应该降级搜索其他可能的图片来源
+4. **用户提供** - 手动上传
 
 **Discord 资料更新（discord-profile.js）：**
 ```javascript
