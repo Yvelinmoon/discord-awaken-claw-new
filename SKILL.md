@@ -1,5 +1,5 @@
 ---
-name:discord-awaken-claw
+name: discord-awaken-claw
 description: 通过和用户交互让openclaw获取新的角色身份。引导用户输入角色概念词，使用discord交互组件输出，接受用户@bot的输入框输入，使用“猜角色”的方式获取用户目标角色，并在用户点击确认后更新bot头像，nickname，soul.md，从而让openclaw化身为这个角色。
 ---
 
