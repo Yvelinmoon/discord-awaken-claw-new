@@ -530,13 +530,13 @@ if (buttonUserId !== userId) {
 **搜索顺序（必须逐级尝试，不可跳过）：**
 
 1️⃣ **Neta API**（优先）
-   - 二次元角色：使用 neta skill 里 `request character` 的能力在自有角色库中搜索
+   - 二次元角色：使用你已经安装的 neta-skills 里 `搜索角色（search_character_or_elementum）` 的能力在自有角色库中搜索
    - 优势：质量高、版权清晰、风格统一
    - **确保你已安装 neta 技能**
 
 2️⃣ **Wiki 百科**（主要来源）
    - 非二次元角色/真实人物：联网搜索对应人物/角色的 Wiki 百科图片
-   - 来源：维基百科、百度百科、萌娘百科、Fandom Wiki 等
+   - 来源：优先维基百科、百度百科、萌娘百科、Fandom Wiki 等
    - 使用 `discord-profile.js` 自动获取
 
 3️⃣ **备用图片源**（降级方案）
