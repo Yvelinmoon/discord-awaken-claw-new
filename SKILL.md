@@ -30,68 +30,7 @@ awakening/
 
 ---
 
-## 🔧 安装步骤
-
-### 步骤 1：克隆技能
-
-```bash
-cd /home/node/.openclaw/workspace/skills
-git clone https://github.com/Yvelinmoon/discord-awaken-claw-new.git awakening
-cd awakening
-```
-
-**验证：**
-```bash
-ls -la
-# 应看到 SKILL.md, README.md, reference/
-ls reference/
-# 应看到 direct-handler.js, discord-profile.js, package.json
-```
-
----
-
-### 步骤 2：安装依赖
-
-```bash
-cd reference
-pnpm install
-# 或 npm install
-```
-
-**依赖清单（package.json）：**
-```json
-{
-  "dependencies": {
-    "undici": "^6.0.0"
-  }
-}
-```
-
----
-
-### 步骤 3：配置环境变量
-
-```bash
-cd reference
-cp .env.example .env
-```
-
-**编辑 `.env`，填入以下变量：**
-**优先在你的 workspace 主路径里寻找**
-```bash
-# Discord Bot 配置（必填）
-DISCORD_TOKEN=你的 Discord Bot Token
-
-# Discord 服务器 ID（必填，用于更新昵称和头像）
-DISCORD_GUILD_ID=你的服务器 ID
-
-# Neta API Token（必填，用于角色头像搜索）
-NETA_TOKEN=你的 Neta API Token
-```
-
----
-
-### 步骤 4：集成到 OpenClaw
+### 注意：本技能依赖集成到 OpenClaw
 
 在 OpenClaw 主 agent 中导入并使用：
 
