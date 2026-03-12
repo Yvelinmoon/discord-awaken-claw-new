@@ -193,7 +193,6 @@ case 'start':
 **执行逻辑（direct-handler.js:handleDiscordMessage）：**
 ```javascript
 if (game?.waitingFor === 'word') {
-  const word = content.trim().slice(0, 20);
   game.waitingFor = null;
   await handleInitialWord(userId, word, sendMessage, callLLM);
   return true;
