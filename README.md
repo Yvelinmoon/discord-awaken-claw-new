@@ -1,6 +1,8 @@
 # 🦞 龙虾宝宝觉醒技能
 
 一个完整的 Discord 角色觉醒技能，通过问答→猜测→确认→觉醒→角色扮演的完整流程，让 Bot 变成用户心中的角色。
+<img width="2486" height="1584" alt="image" src="https://github.com/user-attachments/assets/fe88badc-4074-44f9-be59-3947c892aa4e" />
+
 
 ---
 
