@@ -81,7 +81,7 @@ function buildNextStepPrompt(word, answers, wrongGuesses) {
 
 请判断你的确信程度，然后选择：
 
-A) 如果你有 85% 以上的把握，直接猜测，输出：
+A) 如果你有 85% 以上的把握，甚至已经获得了角色/人物名称，直接猜测，输出：
 {
   "action": "guess",
   "character": "角色中文名全名",
