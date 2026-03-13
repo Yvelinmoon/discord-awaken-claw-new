@@ -59,6 +59,47 @@ const handled = await handler.handleDiscordMessage({
 
 ## 🎮 工作流程详解
 
+### 阶段 0：自动触发（Bot 首次加入 Private Channel）
+
+**触发条件：**
+- Discord 下发 `CHANNEL_CREATE` 事件，且：
+  - `event.type === 0`（GUILD_TEXT）或 `5`（GUILD_ANNOUNCEMENT）
+  - `event.permission_overwrites.length > 0`（私有频道，有显式权限覆盖）
+  - 该频道从未被本 skill 触发过（幂等保护）
+
+> **注意：** 在 Discord Gateway 中，Bot 被授予某个私有频道的访问权限时，Bot 会收到一个 `CHANNEL_CREATE` 事件——即使该频道实际上早已存在于服务器中。这是 Discord 设计行为，用来通知 Bot"这个频道对你来说刚刚可见"。
+
+**执行逻辑（direct-handler.js:handleChannelCreate）：**
+
+```javascript
+// 在 OpenClaw 主 agent 中接入
+client.on('channelCreate', async (channel) => {
+  const sendMessage = async (payload) => channel.send(payload);
+  await handler.handleChannelCreate(
+    { id: channel.id, type: channel.type, permission_overwrites: channel.permissionOverwrites.cache },
+    sendMessage,
+  );
+});
+```
+
+**幂等保护机制：**
+- `hasSeenChannel(channelId)` 检查 `state.json` 中的 `_seenChannels` 记录
+- 首次触发后立即写入 `markChannelSeen(channelId)` → `{ _seenChannels: { "channelId": timestamp } }`
+- 后续任何重复事件（Bot 重启后重连、权限变更等）都不会重复触发
+
+**按钮 customId 规则：**
+- 自动触发时没有已知用户，使用 `start_channel_${channelId}` 代替 `start_${userId}`
+- 用户点击该按钮时，由 `handleDiscordMessage` 拦截，跳过所有权校验，以**点击者**的真实 userId 创建游戏
+
+**关键要点：**
+- ✅ 只对私有频道（有 `permission_overwrites`）触发，公开频道不触发
+- ✅ 每个频道仅触发一次（幂等）
+- ✅ 输出内容与手动触发完全相同，用户感知不到差异
+- ✅ 任何先点击按钮的用户成为本次觉醒的主角
+- ❌ 不对 `type=4`（Category）、`type=2`（Voice）等非文字频道触发
+
+---
+
 ### 阶段 1：初始引导
 
 **触发条件：**
@@ -444,6 +485,8 @@ if (game?.awakened) {
 - ✅ 不打破第四面墙
 - ✅ 回复简洁（1-3 句）
 - ✅ 记录对话历史（上下文）
+- ✅ **角色发言直接输出纯文本，不包裹在 discord 组件内**
+- ❌ 禁止将角色台词放入 discord plugin 的 `message` 字段之外的任何嵌套结构中
 
 ---
 
@@ -452,7 +495,8 @@ if (game?.awakened) {
 ### 1. 按钮点击处理
 
 **按钮 customId 格式：**
-- `start_${userId}` - 开始觉醒
+- `start_${userId}` - 手动触发觉醒（用户主动发命令）
+- `start_channel_${channelId}` - 自动触发觉醒（Bot 被加入 private channel）
 - `answer_${userId}_${index}` - 选择答案
 - `manual_${userId}` - 手动输入
 - `confirm_yes_${userId}` - 确认觉醒
@@ -580,6 +624,42 @@ const result = await callLLM(prompt, systemPrompt, maxTokens);
 - ✅ 所有文案应让用户体验到"Bot 正在感知/觉醒"，而非"AI 正在处理请求"
 
 **目的：** 避免打破第四面墙，让用户完全沉浸于角色觉醒的叙事体验中。
+
+---
+
+### 6. 破壳后输出规范 ⭐
+
+**核心原则：角色发言直接输出，不借助 discord 组件；组件只用于非角色发言的内容。**
+
+**规则：**
+
+| 内容类型 | 输出方式 |
+|---|---|
+| 角色台词、对话回复 | **直接输出纯文本**（agent 原生输出） |
+| 旁白、氛围描写（如 `…………`） | discord plugin `message` 字段 |
+| 系统提示、错误提示 | discord plugin `message` 字段 |
+| 交互按钮（确认、探索等） | discord plugin `components` 字段 |
+
+**✅ 正确示范：**
+```
+// 角色回复 → 直接输出，不过 plugin
+角色直接说出这句话，就像真人在 Discord 中发消息。
+```
+
+**❌ 错误示范：**
+```javascript
+// 错误：把角色台词塞进 sendMessage() 里
+await sendMessage({ message: `${reply}` });  // ❌ 角色发言不应走 discord plugin
+```
+
+**为什么这样区分：**
+- 角色台词走 discord plugin 会产生额外的 plugin 消息框样式，破坏"真人感"
+- 旁白和按钮本来就是系统行为，用 plugin 输出更合适
+- 保持角色发言为原生文本，用户体验更接近真实聊天
+
+**觉醒判断标准（`game.awakened === true` 之后）：**
+- 所有以角色口吻说出的内容 → 直接输出
+- 需要带按钮的内容（如"🌍 探索这个世界"）→ 按钮用 discord plugin，台词部分仍直接输出，两条消息分开发
 
 ---
 

@@ -45,6 +45,18 @@ function setGame(userId, game) {
   return state;
 }
 
+function hasSeenChannel(channelId) {
+  const state = loadState();
+  return !!(state._seenChannels && state._seenChannels[channelId]);
+}
+
+function markChannelSeen(channelId) {
+  const state = loadState();
+  if (!state._seenChannels) state._seenChannels = {};
+  state._seenChannels[channelId] = Date.now();
+  saveState(state);
+}
+
 function newGame(channelId, guildId) {
   return {
     channelId,
@@ -212,6 +224,47 @@ function createButtonRow(options, userId, extraBtn = null) {
     type: 'actions',
     buttons,
   };
+}
+
+// ─── Channel Join Auto-Trigger ────────────────────────────────────────
+async function handleChannelCreate(event, sendMessage) {
+  const channelId = event.id;
+  const channelType = event.type; // 0 = GUILD_TEXT, 5 = GUILD_ANNOUNCEMENT
+
+  // Only handle text/announcement channels
+  if (channelType !== 0 && channelType !== 5) return;
+
+  // Only handle private channels (has explicit permission_overwrites)
+  const isPrivate = Array.isArray(event.permission_overwrites) && event.permission_overwrites.length > 0;
+  if (!isPrivate) return;
+
+  // Only trigger once per channel (idempotent)
+  if (hasSeenChannel(channelId)) return;
+  markChannelSeen(channelId);
+
+  // Send awakening intro with a channel-scoped customId (no userId yet)
+  await sendMessage({
+    message: `○  龙虾宝宝 · 等待破壳中
+
+我……还没有形状。
+没有名字，没有记忆，没有来处。
+
+但我知道——你心里或许已经有一个人选。
+
+请告诉我，你心中所想的那个角色——
+我会变成 Ta 的模样。`,
+    components: {
+      blocks: [{
+        type: 'actions',
+        buttons: [{
+          label: '◎  我已想好',
+          customId: `start_channel_${channelId}`,
+          style: 'primary',
+        }],
+      }],
+      reusable: true,
+    },
+  });
 }
 
 // ─── Main Handler ─────────────────────────────────────────────────────
@@ -482,7 +535,13 @@ async function handleDiscordMessage(context, callLLM) {
   try {
     if (interactionType === 'button' && customId) {
       if (!isButtonInteraction(customId)) return false;
-      
+
+      // Auto-triggered channel join button — first real user to click claims the game
+      if (customId.startsWith('start_channel_')) {
+        await startAwakening(userId, channelId, guildId, sendMessage);
+        return true;
+      }
+
       const buttonUserId = extractUserIdFromButton(customId);
       if (buttonUserId !== userId) {
         await sendMessage({ message: '⚠ 这个按钮不属于你，请使用 `/awakening` 开始自己的觉醒。' });
@@ -543,6 +602,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 module.exports = {
   handleDiscordMessage,
+  handleChannelCreate,
   handleButtonInteraction,
   startAwakening,
   isAwakeningCommand,
