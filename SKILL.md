@@ -468,7 +468,7 @@ if (buttonUserId !== userId) {
 
 **搜索顺序（必须逐级尝试，不可跳过）：**
 
-1️⃣ **Neta API**（优先）
+1️⃣ **Neta API**（第一优先）
    - 二次元角色：使用你已经安装的 neta-skills 里 `搜索角色（search_character_or_elementum）` 的能力在自有角色库中搜索
    - 优势：质量高、版权清晰、风格统一
    - **确保你已安装 neta 技能**
