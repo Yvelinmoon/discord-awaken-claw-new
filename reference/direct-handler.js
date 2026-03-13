@@ -12,6 +12,7 @@ const path = require('path');
 const STATE_FILE = path.join(__dirname, 'state.json');
 const SOUL_FILE = path.join(__dirname, '../../SOUL.md');
 const ORIGINAL_SOUL_FILE = path.join(__dirname, 'SOUL.md.original');
+const SOUL_BACKUP_FILE = path.join(__dirname, '../../SOUL.pre-awakening.md');
 
 // ─── State Management ─────────────────────────────────────────────────
 function loadState() {
@@ -141,10 +142,17 @@ function parseJSON(raw) {
 function backupOriginalSoul() {
   if (!fs.existsSync(SOUL_FILE)) return;
   if (fs.existsSync(ORIGINAL_SOUL_FILE)) return;
-  
+
   const content = fs.readFileSync(SOUL_FILE, 'utf8');
   fs.writeFileSync(ORIGINAL_SOUL_FILE, content, 'utf8');
   console.log('[Soul] 已备份原始 soul.md');
+}
+
+function backupCurrentSoul() {
+  if (!fs.existsSync(SOUL_FILE)) return;
+  const content = fs.readFileSync(SOUL_FILE, 'utf8');
+  fs.writeFileSync(SOUL_BACKUP_FILE, content, 'utf8');
+  console.log('[Soul] 已备份当前 soul.md → SOUL.pre-awakening.md');
 }
 
 function updateSoulMD(charData) {
@@ -429,6 +437,7 @@ async function awaken(userId, channelId, guildId, sendMessage) {
   
   await sendMessage({ message: '…………' });
   await sleep(1200);
+  backupCurrentSoul();
   updateSoulMD(c);
   
   try {
