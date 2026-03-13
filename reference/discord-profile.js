@@ -41,6 +41,36 @@ if (!fs.existsSync(ASSETS_DIR)) {
   fs.mkdirSync(ASSETS_DIR, { recursive: true });
 }
 
+// ─── Utility Functions ────────────────────────────────────────────────
+/**
+ * 验证图片 URL 是否可访问
+ * @param {string} url - 图片 URL
+ * @returns {Promise<boolean>}
+ */
+async function isValidImageUrl(url) {
+  return new Promise((resolve) => {
+    if (!url) {
+      resolve(false);
+      return;
+    }
+    
+    const req = https.get(url, { timeout: 5000 }, res => {
+      if (res.statusCode === 302 || res.statusCode === 301) {
+        // 重定向，跟随
+        isValidImageUrl(res.headers.location).then(resolve);
+        return;
+      }
+      resolve(res.statusCode === 200);
+    });
+    
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(false);
+    });
+  });
+}
+
 // ─── Discord API Helpers ──────────────────────────────────────────────
 /**
  * 调用 Discord API
@@ -214,13 +244,16 @@ async function updateAvatar(imageUrl) {
  *   - 适用于：动漫、游戏、小说等虚构角色
  *   - 成功率高，图片质量好
  * 
- * 【优先级 2】真实人物维基百科
- *   - 适用于：总统、名人等真实人物
- *   - 使用维基百科官方肖像
+ * 【优先级 2】维基百科/公开图片搜索
+ *   - 适用于：真实人物、知名虚构角色
+ *   - 使用维基百科、Fandom Wiki 等公开资源
  * 
  * 【优先级 3】预定义图片库
  *   - 硬编码的可靠图片 URL
  *   - 作为最后备选方案
+ * 
+ * 【优先级 4】Web 搜索提示
+ *   - 当所有自动搜索失败时，提示用户进行 Web 搜索
  * 
  * ─────────────────────────────────────────────────────────────────────
  * 
@@ -235,21 +268,22 @@ async function searchCharacterImage(characterName, from) {
   console.log('[Search] ─────────────────────────────────────');
   
   // ─── 【优先级 1】Neta API 角色查询 ← 主要方式！ ─────────────────────
-  console.log('[Search] [1/3] 尝试 Neta API 搜索...');
+  console.log('[Search] [1/4] 尝试 Neta API 搜索（灵活关键词策略）...');
   const netaSearch = require('./neta-avatar-search.js');
   try {
     const netaResult = await netaSearch.searchCharacter(characterName, from);
     if (netaResult && netaResult.avatar) {
       console.log(`[Search] ✅ [优先级 1 - Neta] 找到角色：${netaResult.name}`);
       console.log(`[Search] 🖼️ 头像 URL: ${netaResult.avatar}`);
+      console.log(`[Search] 📝 使用关键词：${netaResult.keywords || 'N/A'}`);
       return netaResult.avatar;
     }
   } catch (err) {
     console.warn('[Search] Neta 搜索失败:', err.message);
   }
   
-  // ─── 【优先级 2】真实人物维基百科 ────────────────────────────────────
-  console.log('[Search] [2/3] 尝试维基百科搜索（真实人物）...');
+  // ─── 【优先级 2】维基百科/公开图片搜索 ───────────────────────────────
+  console.log('[Search] [2/4] 尝试维基百科/公开图片搜索...');
   const wikiSearch = await searchWikiImage(characterName, from);
   if (wikiSearch) {
     console.log(`[Search] ✅ [优先级 2 - 维基百科] 找到图片：${wikiSearch}`);
@@ -257,7 +291,7 @@ async function searchCharacterImage(characterName, from) {
   }
   
   // ─── 【优先级 3】预定义图片库 ────────────────────────────────────────
-  console.log('[Search] [3/3] 尝试预定义图片库...');
+  console.log('[Search] [3/4] 尝试预定义图片库...');
   const predefinedPeople = {
     // 真实人物 - 维基百科官方肖像
     '唐纳德·特朗普': 'https://upload.wikimedia.org/wikipedia/commons/5/56/Donald_Trump_official_portrait.jpg',
@@ -281,12 +315,34 @@ async function searchCharacterImage(characterName, from) {
     return predefinedPeople[characterName];
   }
   
-  // ─── 所有方式都失败了 ────────────────────────────────────────────────
-  console.log('[Search] ❌ 所有搜索方式都未找到图片');
-  console.log('[Search] 建议：');
-  console.log('[Search]   1. 检查 NETA_TOKEN 是否配置正确');
-  console.log('[Search]   2. 检查 neta-skills 是否已安装依赖');
-  console.log('[Search]   3. 手动提供角色图片 URL');
+  // ─── 【优先级 4】所有方式都失败了 - 提供 Web 搜索建议 ─────────────────
+  console.log('[Search] ❌ 所有自动搜索方式都未找到图片');
+  console.log('[Search] ─────────────────────────────────────');
+  console.log('[Search] 💡 建议进行 Web 搜索获取图片：');
+  
+  // 生成搜索建议
+  const searchQueries = [
+    `${characterName} ${from.replace(/[《》]/g, '')} 官方图片`,
+    `${characterName} official portrait`,
+    `${characterName} wiki`,
+    `${from.replace(/[《》]/g, '')} ${characterName} character art`,
+  ];
+  
+  console.log('[Search] 推荐搜索关键词：');
+  searchQueries.forEach((q, i) => {
+    console.log(`[Search]   ${i + 1}. ${q}`);
+  });
+  
+  console.log('[Search] ─────────────────────────────────────');
+  console.log('[Search] 📌 可能原因：');
+  console.log('[Search]   - Neta 数据库中没有该角色');
+  console.log('[Search]   - 角色名称不够准确或完整');
+  console.log('[Search]   - 图片 URL 已失效或不可访问');
+  console.log('[Search] 📌 解决方案：');
+  console.log('[Search]   1. 使用上述关键词进行 Web 搜索');
+  console.log('[Search]   2. 手动提供角色图片 URL');
+  console.log('[Search]   3. 检查 NETA_TOKEN 是否配置正确');
+  
   return null;
 }
 
@@ -297,7 +353,7 @@ async function searchCharacterImage(characterName, from) {
  * @returns {Promise<string|null>} 图片 URL
  */
 async function searchWikiImage(characterName, from) {
-  // 真实人物：尝试维基百科
+  // 策略 1: 预定义的真实人物映射
   const wikiMap = {
     '唐纳德·特朗普': 'Donald_Trump',
     'Donald Trump': 'Donald_Trump',
@@ -312,14 +368,42 @@ async function searchWikiImage(characterName, from) {
   
   const wikiName = wikiMap[characterName];
   if (wikiName) {
-    // 维基百科头像 URL 格式
-    const wikiUrl = `https://upload.wikimedia.org/wikipedia/commons/${wikiName === 'Donald_Trump' ? '5/56/Donald_Trump_official_portrait.jpg' : wikiName === 'Joe_Biden' ? '6/68/Joe_Biden_presidential_portrait.jpg' : wikiName === 'Barack_Obama' ? '8/8d/President_Barack_Obama.jpg' : ''}`;
+    const wikiUrls = {
+      'Donald_Trump': 'https://upload.wikimedia.org/wikipedia/commons/5/56/Donald_Trump_official_portrait.jpg',
+      'Joe_Biden': 'https://upload.wikimedia.org/wikipedia/commons/6/68/Joe_Biden_presidential_portrait.jpg',
+      'Barack_Obama': 'https://upload.wikimedia.org/wikipedia/commons/8/8d/President_Barack_Obama.jpg',
+    };
+    const wikiUrl = wikiUrls[wikiName];
     if (wikiUrl) {
-      console.log(`[Wiki] 使用维基百科图片：${wikiName}`);
+      console.log(`[Wiki] 使用预定义维基百科图片：${wikiName}`);
       return wikiUrl;
     }
   }
   
+  // 策略 2: 尝试通用维基百科 URL 格式（虚构角色）
+  // 例如：哈利·波特 → Harry_Potter_(character)
+  const cleanName = characterName.replace(/[·\s]/g, '_');
+  const wikiCandidates = [
+    // 尝试角色名 + 作品名
+    `https://upload.wikimedia.org/wikipedia/en/thumb/${cleanName}.png/220px-${cleanName}.png`,
+    // 尝试 Fandom Wiki 格式
+    `https://static.wikia.nocookie.net/${from.replace(/[《》\s]/g, '').toLowerCase()}/images/${cleanName}.jpg`,
+  ];
+  
+  // 验证这些 URL 是否有效
+  for (const url of wikiCandidates) {
+    try {
+      const isValid = await isValidImageUrl(url);
+      if (isValid) {
+        console.log(`[Wiki] 找到通用维基图片：${url}`);
+        return url;
+      }
+    } catch (e) {
+      // 继续尝试下一个
+    }
+  }
+  
+  console.log('[Wiki] 未找到维基百科图片');
   return null;
 }
 
