@@ -354,6 +354,7 @@ await sendMessage({ message: c.greet.replace(/\\n/g, '\n') });
 - ✅ 用省略号和延迟营造神秘感
 - ✅ 等待 Discord API 生效后再输出问候（约 1.5 秒）
 - ✅ 直接输出角色问候，以及询问自己现在在哪里的问题
+- ✅ 问候消息需附带 **"🌍 探索这个世界"** 按钮（Primary 样式），点击后立即触发 `travel-claw` skill
 - ✅ 错误静默处理（不中断流程）
 
 **❌ 错误示范：**
@@ -368,8 +369,52 @@ await discordProfile.updateDiscordProfile(c, guildId);  // ❌ 用户已经看�
 // 正确：先更新资料，再输出问候
 await discordProfile.updateDiscordProfile(c, guildId);  // ✅ 先更新
 await sleep(1500);  // ✅ 等待生效
-await sendMessage({ message: c.greet });  // ✅ 再输出，用户看到新形象
+await sendMessage({ 
+  message: c.greet,
+  components: {
+    blocks: [{
+      type: 'actions',
+      buttons: [{
+        label: '🌍 探索这个世界',
+        customId: `travel_${userId}`,
+        style: 'primary',
+      }],
+    }],
+    reusable: true,
+  },
+});  // ✅ 再输出，用户看到新形象
 ```
+
+---
+
+### 阶段 9.5：探索世界按钮处理
+
+**触发条件：**
+- 用户点击"🌍 探索这个世界"按钮
+
+**执行逻辑：**
+```javascript
+case 'travel':
+  // 验证用户 ID
+  const buttonUserId = extractUserIdFromButton(customId);
+  if (buttonUserId !== userId) {
+    await sendMessage({ message: '⚠ 这个按钮不属于你' });
+    return true;
+  }
+  
+  // 触发 travel-claw skill
+  await sessions_spawn({
+    task: '用户想要探索当前所在的世界。请根据角色设定和当前上下文，引导用户了解这个世界的背景、环境、和可能的冒险。',
+    mode: 'run',
+    runtime: 'subagent',
+  });
+  break;
+```
+
+**关键要点：**
+- ✅ 按钮 customId 格式：`travel_${userId}`
+- ✅ 点击后立即触发 `travel-claw` skill
+- ✅ 使用 subagent 运行，避免阻塞主对话流程
 
 ---
 
@@ -412,6 +457,7 @@ if (game?.awakened) {
 - `manual_${userId}` - 手动输入
 - `confirm_yes_${userId}` - 确认觉醒
 - `confirm_no_${userId}` - 继续猜测
+- `travel_${userId}` - 探索这个世界（觉醒后触发 travel-claw skill）
 
 **必须验证用户 ID：**
 ```javascript
